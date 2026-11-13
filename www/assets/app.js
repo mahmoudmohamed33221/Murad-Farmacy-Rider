@@ -39,12 +39,22 @@
     hourglass: '<path d="M6 3h12M6 21h12M7 3c0 5 5 6 5 9s-5 4-5 9M17 3c0 5-5 6-5 9s5 4 5 9"/>',
     home: '<path d="M3 11l9-7 9 7v9H3z"/>',
     note: '<path d="M5 4h14v12l-5 5H5z"/><path d="M14 21v-5h5"/>',
+    chat: '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/>',
+    scooter: '<circle cx="5.5" cy="17.5" r="2.5"/><circle cx="18.5" cy="17.5" r="2.5"/><path d="M8 17.5h6.5M16.4 17.5 14.6 6.5M12.4 6.5H17M5.5 15c0-3 1.6-4.5 4.2-4.5h3.4"/>',
+    menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+    chev: '<path d="M6 9l6 6 6-6"/>',
+    receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+    mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+    chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+    headset: '<path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/>',
+    back: '<path d="M9 6l6 6-6 6"/>',
     wifi: '<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01"/>'
   };
   var ic = function (n) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (P[n] || "") + "</svg>"; };
 
   // ---------- الحالة ----------
-  var S = { view: "splash", tab: "new", creds: ld("mrf_creds", null), pilot: ld("mrf_pilot", null), pool: [], mine: [], history: [], seen: null, loaded: false,
+  var S = { view: "splash", tab: "new", page: null, inv: {}, creds: ld("mrf_creds", null), pilot: ld("mrf_pilot", null), pool: [], mine: [], history: [], seen: null, loaded: false,
     online: true, busy: false, keys: {}, flash: {}, pos: null, geoOn: false, etaSent: {}, etaTxt: {}, token: ld("mrf_token", ""), tokenSent: "", pushReady: false, msg: "", pendT: null, pollT: null, lastSync: 0 };
   var native = function () { return !!(self.Capacitor && self.Capacitor.isNativePlatform && self.Capacitor.isNativePlatform()); };
   var plug = function (n) { return self.Capacitor && self.Capacitor.Plugins && self.Capacitor.Plugins[n]; };
@@ -96,21 +106,26 @@
   }
 
   // ---------- تحليل بيانات الطلب ----------
-  function parseItems(txt) {
+  // نفس منطق فاتورة تطبيق العميل (سعر القطعة بيراعي هدية/خصم الكمية)
+  function parseLines(txt) {
     return String(txt || "").split("\n").filter(Boolean).map(function (x) {
       var m = String(x).match(/^(.*?)\s×\s(\d+)(?:\s\(\+(\d+)\s([^)]*)\))?\s=\s([\d.,]+)/);
-      if (!m) return { n: String(x), raw: true };
-      return { n: m[1].trim(), q: +m[2], ex: +m[3] || 0, w: m[4] || "", t: parseFloat(m[5].replace(/,/g, "")) || 0 };
+      if (!m) return { n: String(x), q: 0, t: 0, p: 0, raw: true };
+      var q = +m[2], t = parseFloat(m[5].replace(/,/g, "")) || 0, ex = +m[3] || 0, w = m[4] || "", f = 0;
+      if (ex) { var pc = w.match(/خصم\s*(\d+(?:\.\d+)?)\s*%/); f = /هدي/.test(w) ? 0 : /نص/.test(w) ? 0.5 : pc ? 1 - parseFloat(pc[1]) / 100 : 0; }
+      return { n: m[1].trim(), q: q, t: t, p: q ? t / (q + ex * f) : 0, ex: ex, w: w };
     });
   }
-  function orderAgo(o) {
-    var d = String(o.date || "").match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/), t = String(o.time || "").match(/(\d{1,2}):(\d{2})\s*([صم])?/);
-    if (!d || !t) return o.time || "";
-    var h = +t[1]; if (t[3] === "م" && h < 12) h += 12; if (t[3] === "ص" && h === 12) h = 0;
-    var mins = Math.round((Date.now() - new Date(+d[3], +d[2] - 1, +d[1], h, +t[2]).getTime()) / 60000);
-    if (isNaN(mins) || mins < 0 || mins > 1440) return o.time || "";
-    return mins < 1 ? "دلوقتي" : mins < 60 ? "من " + mins + " دقيقة" : "من " + Math.floor(mins / 60) + " ساعة";
+  var num = function (n) { return (Math.round((Number(n) || 0) * 100) / 100).toLocaleString("en-US", { maximumFractionDigits: 2 }); };
+  var DELIVERY_FEE = 0;   // قيمة التوصيل: 0 لحد ما تتحدد طريقة الحساب
+  function invTotal(o) { var sum = parseLines(o.items).reduce(function (a, l) { return a + l.t; }, 0); return (sum > 0 ? sum : Number(o.total) || 0) + DELIVERY_FEE; }
+  function ageNow(o) { return o.ageMin >= 0 ? o.ageMin + Math.floor((Date.now() - (S.lastSync || Date.now())) / 60000) : -1; }
+  function fmtAge(m) {
+    if (m < 0) return "—"; if (m < 1) return "الآن"; if (m < 60) return m + " دقيقة";
+    if (m < 1440) { var h = Math.floor(m / 60), r = m % 60; return h + " ساعة" + (r ? " و " + r + " دقيقة" : ""); }
+    return Math.floor(m / 1440) + " يوم";
   }
+  var ageCls = function (m) { return m < 0 ? "" : m < 10 ? "g" : m < 20 ? "y" : "r"; };
   function coordsFrom(s) {
     s = decodeURIComponent(String(s || "").replace(/%(?![0-9a-f]{2})/gi, ""));
     var m = s.match(/@(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)/) || s.match(/[?&](?:q|ll|query|destination)=(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)/) || s.match(/^\s*(-?\d{1,3}\.\d{3,})\s*[,،]\s*(-?\d{1,3}\.\d{3,})\s*$/);
@@ -250,7 +265,7 @@
 
   // ====================== الشاشة الرئيسية ======================
   function enterMain() {
-    stopPending(); S.view = "main"; S.tab = S.tab || "new"; S.loaded = false; S.seen = null;
+    stopPending(); S.view = "main"; S.tab = S.tab || "new"; S.page = null; S.loaded = false; S.seen = null;
     history.replaceState({ r: 1 }, ""); history.pushState({ r: 2 }, "");
     render(); refresh();
     if (S.pollT) clearInterval(S.pollT);
@@ -295,11 +310,11 @@
     var k = "acc" + bon; if (S.keys[k]) return; S.keys[k] = 1; render();
     api("riderAccept", { bon: bon }).then(function (r) {
       delete S.keys[k];
-      if (r && r.ok) { vib(60); toast("اتقبل الطلب #" + bon + " ✅", "ok"); S.tab = "mine"; S.flash[bon] = 1; refresh(); }
+      if (r && r.ok) { vib(60); toast("اتقبل الطلب #" + bon + " ✅", "ok"); S.tab = "acc"; S.page = null; S.flash[bon] = 1; refresh(); }
       else { toast((r && r.message) || "مقدرتش أقبل الطلب", "bad"); if (r && /taken|gone|limit|not_working/.test(r.status || "")) refresh(); else render(); }
     });
   }
-  var STAGE_BTN = { accepted: ["prepare", "وصلت الصيدلية — بدء التجهيز", "pri"], preparing: ["deliver", "استلمت الطلب — خرجت للتوصيل", "pri"], delivering: ["complete", "تم تسليم الطلب للعميل", "ok"] };
+  var STAGE_BTN = { accepted: ["prepare", "وصلت الصيدلية", "pri"], preparing: ["deliver", "تم تجهيز الطلب — توصيل الطلب", "pri"], delivering: ["complete", "تم توصيل الطلب", "ok"] };
   function stage(bon, st) {
     var o = S.mine.filter(function (x) { return x.bon === bon; })[0]; if (!o) return;
     var k = "st" + bon; if (S.keys[k]) return;
@@ -307,11 +322,13 @@
       S.keys[k] = 1; render();
       api("riderStage", { bon: bon, stage: st }).then(function (r) {
         delete S.keys[k];
-        if (r && r.ok) { vib(60); toast(st === "complete" ? "تم التسليم 🎉 تسلم إيدك" : st === "deliver" ? "الطلب في الطريق للعميل 🛵" : "جاري التجهيز", "ok"); S.etaSent = {}; refresh(); }
-        else { toast((r && r.message) || "مقدرتش أنفّذ الخطوة", "bad"); r && r.status === "network" ? render() : refresh(); }
+        if (r && r.ok) {
+          vib(60); toast(st === "complete" ? "تم التوصيل 🎉 تسلم إيدك" : st === "deliver" ? "الطلب في الطريق للعميل 🛵" : "جاري التجهيز — كمّل من تبويب التوصيل", "ok");
+          if (st === "prepare") S.tab = "del"; S.etaSent = {}; refresh();
+        } else { toast((r && r.message) || "مقدرتش أنفّذ الخطوة", "bad"); r && r.status === "network" ? render() : refresh(); }
       });
     };
-    if (st === "complete") confirmSheet({ title: "تأكيد التسليم", text: "اتأكد إنك سلّمت الطلب وحصّلت المبلغ من العميل:", big: money(o.total), ok: "تم التسليم", cls: "ok" }).then(function (y) { if (y) run(); });
+    if (st === "complete") confirmSheet({ title: "تأكيد التوصيل", text: "اتأكد إنك سلّمت الطلب وحصّلت المبلغ من العميل:", big: money(invTotal(o)), ok: "تم التوصيل", cls: "ok" }).then(function (y) { if (y) run(); });
     else run();
   }
   function release(bon) {
@@ -324,55 +341,64 @@
   }
 
   // ---------- العرض ----------
-  function itemsHTML(o, withShip) {
-    var L = parseItems(o.items), sum = 0, rows = L.map(function (l) {
-      if (l.raw) return '<div class="it"><span class="n">' + esc(l.n) + "</span></div>";
-      sum += l.t;
-      return '<div class="it"><span class="n">' + esc(l.n) + (l.ex ? ' <small style="color:var(--or2)">+' + l.ex + " " + esc(l.w) + "</small>" : "") + '</span><span class="q">× ' + l.q + '</span><span class="p">' + money(l.t).replace(" ج.م", "") + "</span></div>";
+  function invoiceHTML(o, withShip) {
+    var L = parseLines(o.items), tot = invTotal(o);
+    var rows = L.map(function (l) {
+      return '<tr><td class="inv-n">' + esc(l.n) + (l.ex ? '<span class="inv-bx">+' + l.ex + " " + esc(l.w) + "</span>" : "") + "</td><td>" + (l.raw ? "-" : num(l.p)) + "</td><td>" + (l.raw ? "-" : l.q) + "</td><td><b>" + (l.raw ? "-" : num(l.t)) + "</b></td></tr>";
     }).join("");
-    var ship = Math.round((Math.max(o.total, sum) - sum) * 100) / 100;
-    if (withShip && sum > 0 && ship > 0) rows += '<div class="it ship"><span class="n">رسوم التوصيل</span><span class="p">' + money(ship).replace(" ج.م", "") + "</span></div>";
-    return '<div class="items">' + rows + "</div>";
+    if (withShip) rows += '<tr class="ship"><td class="inv-n">التوصيل</td><td>—</td><td>—</td><td><b>' + num(DELIVERY_FEE) + "</b></td></tr>";
+    return '<div class="inv"><div class="inv-h"><b>صيدليات د/ مراد صادق</b><img src="assets/logo.png" alt=""></div><div class="inv-sub">فاتورة طلب رقم ' + o.bon + (o.dateTxt ? " · " + esc((o.day ? o.day + " " : "") + o.dateTxt) : "") + (o.timeTxt ? " · " + esc(o.timeTxt) : "") + "</div>" +
+      '<table class="inv-t"><thead><tr><th class="inv-n">اسم الصنف</th><th>سعر القطعة</th><th>العدد</th><th>الإجمالي</th></tr></thead><tbody>' + rows +
+      '</tbody><tfoot><tr><td colspan="4"><div class="inv-f"><span>الإجمالي النهائي</span><b>' + num(tot) + " ج.م</b></div></td></tr></tfoot></table></div>";
+  }
+  function invBlock(o, withShip) {
+    var on = !!S.inv[o.bon];
+    return '<div class="od-inv' + (on ? " open" : "") + '" data-ib="' + o.bon + '"><button type="button" class="invbtn" data-inv="' + o.bon + '">' + ic("receipt") + '<span class="tx">' + (on ? "إخفاء الفاتورة" : "الطلب") + "</span>" + ic("chev") + '</button><div class="inv-wrap"><div class="inv-in">' + invoiceHTML(o, withShip) + "</div></div></div>";
   }
   function poolCard(o) {
-    var k = "acc" + o.bon, nt = (o.note || "").trim();
-    return '<div class="card' + (S.flash[o.bon] ? " flash" : "") + '" id="c' + o.bon + '"><div class="ch"><span class="bon">#' + o.bon + '</span><span class="tag">' + ic("clock") + esc(orderAgo(o)) + '</span><span class="sp"></span><span class="tag or">' + ic("pin") + esc(o.area || "—") + "</span></div>" +
-      itemsHTML(o, false) + (nt ? '<div class="note">' + ic("note").replace("<svg", '<svg style="width:15px;height:15px;vertical-align:-3px;margin-inline-end:4px"') + esc(nt) + "</div>" : "") +
-      '<div class="tot"><span>إجمالي الحساب</span><b>' + money(o.total) + '</b></div><button class="btn pri" data-acc="' + o.bon + '" style="margin-top:8px"' + (S.keys[k] ? " disabled" : "") + ">" + (S.keys[k] ? '<span class="spin"></span>' : ic("check") + " قبول الطلب") + "</button></div>";
+    var k = "acc" + o.bon, ag = ageNow(o), nt = (o.note || "").trim();
+    return '<div class="card' + (S.flash[o.bon] ? " flash" : "") + '" id="c' + o.bon + '"><div class="nhead"><span class="bon">#' + o.bon + '</span><span class="narea">' + esc(o.area || "—") + '</span><span class="newtag">طلب جديد</span></div>' +
+      invBlock(o, false) + (nt ? '<div class="note">' + esc(nt) + "</div>" : "") +
+      '<div class="tcard"><div><small>اليوم</small><b>' + esc(o.day || "—") + (o.dateTxt ? "<span>(" + esc(o.dateTxt) + ")</span>" : "") + '</b></div><div><small>الساعة</small><b>' + esc(o.timeTxt || "—") + '</b></div><div><small>التأخير</small><b class="' + ageCls(ag) + '">' + esc(fmtAge(ag)) + "</b></div></div>" +
+      '<button class="btn pri" data-acc="' + o.bon + '"' + (S.keys[k] ? " disabled" : "") + ">" + (S.keys[k] ? '<span class="spin"></span>' : ic("check") + " قبول الطلب") + "</button></div>";
   }
-  var STEPS = [["accepted", "تم القبول"], ["preparing", "جاري التجهيز"], ["delivering", "جاري التوصيل"], ["done", "تم التوصيل"]];
+  // شريط المراحل: تم القبول ← الوصول/تجهيز الطلب ← توصيل الطلب ← تم التوصيل
+  function stepsHTML(stg) {
+    var d = [{ c: "done", l: "تم القبول", i: "check" }, { c: "cur", l: "الوصول", sub: "تجهيز الطلب" }, { c: "", l: "توصيل الطلب" }, { c: "", l: "تم التوصيل" }];
+    if (stg === "preparing") d[1] = { c: "prog", l: "جاري التجهيز" };
+    if (stg === "delivering") { d[1] = { c: "done", l: "تم التجهيز", i: "check" }; d[2] = { c: "prog", l: "جاري التوصيل" }; }
+    return '<div class="steps">' + d.map(function (x) { return '<div class="st ' + x.c + '"><i>' + (x.i ? ic(x.i) : x.c === "prog" || x.c === "cur" ? "<em></em>" : "") + "</i><span>" + x.l + "</span>" + (x.sub ? "<small>" + x.sub + "</small>" : "") + "</div>"; }).join("") + "</div>";
+  }
   function mineCard(o) {
-    var idx = { accepted: 0, preparing: 1, delivering: 2 }[o.stage] || 0, k = "st" + o.bon, sb = STAGE_BTN[o.stage], et = S.etaTxt[o.bon] || "";
-    var steps = STEPS.map(function (s, i) { return '<div class="st ' + (i < idx + 1 ? (i === idx ? "now" : "done") : "") + '"><i>' + (i < idx ? ic("check") : i === idx ? "●" : "") + "</i>" + s[1] + "</div>"; }).join("");
-    var addr = [o.area, o.street].filter(Boolean).join(" — "), wa = "https://wa.me/2" + String(o.phone || "").replace(/^0/, "");
-    var smap = storeMap(o);
-    return '<div class="card' + (S.flash[o.bon] ? " flash" : "") + '" id="c' + o.bon + '"><div class="ch"><span class="bon">#' + o.bon + '</span><span class="tag">' + ic("clock") + esc(o.time || "") + '</span><span class="sp"></span><span class="tag or">' + esc(o.stage === "accepted" ? "تم القبول" : o.stage === "preparing" ? "جاري التجهيز" : "في الطريق") + "</span></div>" +
-      '<div class="steps">' + steps + "</div>" +
-      (et ? '<div class="eta">' + ic("clock") + esc(et) + "</div>" : "") +
-      '<div class="info">' + ic("user") + '<div class="v"><b>' + esc(o.name) + '</b><small dir="ltr" style="text-align:right">' + esc(o.phone) + "</small></div></div>" +
-      '<div class="info">' + ic("pin") + '<div class="v">' + esc(addr || "—") + (o.landmark ? "<small>علامة مميزة: " + esc(o.landmark) + "</small>" : "") + "</div></div>" +
-      '<div class="acts"><a class="call" href="tel:' + esc(o.phone) + '">' + ic("phone") + "اتصال</a><a class=\"wa\" href=\"" + esc(wa) + '" target="_blank" rel="noopener">' + ic("msg") + 'واتساب</a><a class="map" href="' + esc(custMap(o)) + '" target="_blank" rel="noopener">' + ic("nav") + "العميل</a>" +
-      (smap ? '<a class="map" href="' + esc(smap) + '" target="_blank" rel="noopener">' + ic("store") + "الصيدلية</a>" : "") + "</div>" +
-      itemsHTML(o, true) + (o.note ? '<div class="note">' + esc(o.note) + "</div>" : "") +
-      '<div class="tot"><span>المطلوب تحصيله</span><b>' + money(o.total) + "</b></div>" +
-      '<button class="btn ' + sb[2] + '" data-st="' + o.bon + '|' + sb[0] + '" style="margin-top:8px"' + (S.keys[k] ? " disabled" : "") + ">" + (S.keys[k] ? '<span class="spin"></span>' : sb[1]) + "</button>" +
+    var k = "st" + o.bon, sb = STAGE_BTN[o.stage], et = S.etaTxt[o.bon] || "", wa = "https://wa.me/2" + String(o.phone || "").replace(/^0/, "");
+    var nm = String(o.name || "").trim().split(/\s+/).slice(0, 3).join(" "), tag = o.stage === "accepted" ? "تم القبول" : o.stage === "preparing" ? "جاري التجهيز" : "جاري التوصيل";
+    return '<div class="card mcard' + (S.flash[o.bon] ? " flash" : "") + '" id="c' + o.bon + '"><div class="mhead"><span class="bon">#' + o.bon + '</span><span class="mtag ' + o.stage + '">' + tag + "</span></div>" +
+      '<div class="cust"><div class="crow"><b class="cname">' + esc(nm) + '</b><div class="cbtns"><a class="ib call" href="tel:' + esc(o.phone) + '" aria-label="اتصال">' + ic("phone") + '</a><a class="ib wa" href="' + esc(wa) + '" target="_blank" rel="noopener" aria-label="واتساب">' + ic("msg") + '</a><button class="ib chat" data-chat="1" aria-label="شات">' + ic("chat") + "</button></div></div>" +
+      '<div class="sepl"></div><div class="crow"><div class="addr">' + esc([o.area, o.street].filter(Boolean).join(" — ") || "—") + (o.landmark ? "<small>علامة مميزة: " + esc(o.landmark) + "</small>" : "") + '</div><a class="ib map" href="' + esc(custMap(o)) + '" target="_blank" rel="noopener" aria-label="الموقع على الخريطة">' + ic("pin") + "</a></div></div>" +
+      stepsHTML(o.stage) + (et ? '<div class="eta">' + ic("clock") + esc(et) + "</div>" : "") + invBlock(o, true) + (o.note ? '<div class="note">' + esc(o.note) + "</div>" : "") +
+      '<button class="btn ' + sb[2] + '" data-st="' + o.bon + "|" + sb[0] + '" style="margin-top:10px"' + (S.keys[k] ? " disabled" : "") + ">" + (S.keys[k] ? '<span class="spin"></span>' : sb[1]) + "</button>" +
       (o.stage === "accepted" ? '<button class="link" data-rel="' + o.bon + '" style="color:var(--bad)">تنازل عن الطلب</button>' : "") + "</div>";
   }
   function vNew() {
-    var w = S.pilot && S.pilot.working, h = "";
-    var b = pushBanner(); if (b) h += b;
-    if (!w) return h + '<div class="empty">' + ic("power") + "<b>أنت دلوقتي «لا يعمل»</b>شغّل حالتك علشان تظهرلك الطلبات الجديدة وتوصلك إشعارات.<br><br><button class=\"btn pri\" data-shift=\"1\" style=\"max-width:260px;margin:auto\">" + ic("power") + " ابدأ الشغل</button></div>";
+    var w = S.pilot && S.pilot.working, h = pushBanner();
+    if (!w) return h + '<div class="empty">' + ic("power") + "<b>أنت دلوقتي «لا يعمل»</b>شغّل حالتك علشان تظهرلك الطلبات الجديدة.</div>";
     if (!S.loaded) return h + '<div class="empty"><span class="spin"></span></div>';
-    if (!S.pool.length) return h + '<div class="empty">' + ic("box") + "<b>مفيش طلبات جديدة دلوقتي</b>هننبّهك بصوت وإشعار أول ما يوصل طلب.</div>";
-    return h + '<h3 class="sec">طلبات متاحة <small>(الأسرع بيقبل)</small></h3>' + S.pool.map(poolCard).join("");
+    if (!S.pool.length) return h + '<div class="empty">' + ic("box") + "<b>مفيش طلبات جديدة دلوقتي</b>هننبّهك بصوت واهتزاز أول ما يوصل طلب (سيب التطبيق مفتوح).</div>";
+    return h + '<h3 class="sec">الطلبات الجديدة <small>(الأسرع بيقبل)</small></h3>' + S.pool.map(poolCard).join("");
   }
-  function vMine() {
-    if (!S.mine.length) return '<div class="empty">' + ic("bike") + "<b>مفيش طلبات شغالة</b>الطلبات اللي بتقبلها بتظهر هنا.</div>";
-    return '<h3 class="sec">طلباتي الشغالة <small>(' + S.mine.length + ")</small></h3>" + S.mine.map(mineCard).join("");
+  function vAcc() {
+    var L = S.mine.filter(function (o) { return o.stage === "accepted"; });
+    if (!L.length) return '<div class="empty">' + ic("checkc") + "<b>مفيش طلبات مقبولة</b>الطلبات اللي بتقبلها بتظهر هنا لحد ما توصل الصيدلية.</div>";
+    return '<h3 class="sec">الطلبات المقبولة <small>(' + L.length + ")</small></h3>" + L.map(mineCard).join("");
+  }
+  function vDel() {
+    var L = S.mine.filter(function (o) { return o.stage !== "accepted"; });
+    if (!L.length) return '<div class="empty">' + ic("scooter") + "<b>مفيش طلبات في التوصيل</b>بعد ما تدوس «وصلت الصيدلية» الطلب بيجي هنا.</div>";
+    return '<h3 class="sec">التوصيل <small>(' + L.length + ")</small></h3>" + L.map(mineCard).join("");
   }
   function vHist() {
     var tk = todayKey(), td = S.history.filter(function (h) { return String(h.doneAt || "").indexOf(tk) === 0; }), sum = td.reduce(function (a, h) { return a + (Number(h.total) || 0); }, 0);
-    var h = '<div class="sum"><div class="b"><small>طلبات النهاردة</small><b>' + td.length + '</b></div><div class="b"><small>إجمالي التحصيل</small><b>' + money(sum).replace(" ج.م", "") + "</b></div></div>";
+    var h = '<div class="sum"><div class="b"><small>طلبات النهاردة</small><b>' + td.length + '</b></div><div class="b"><small>إجمالي التحصيل</small><b>' + num(sum) + "</b></div></div>";
     if (!S.history.length) return h + '<div class="empty">' + ic("history") + "<b>لسه مفيش طلبات متسلّمة</b></div>";
     return h + '<h3 class="sec">آخر الطلبات المتسلّمة</h3>' + S.history.map(function (o) {
       return '<div class="h-row"><div class="l"><b>#' + o.bon + " · " + esc(o.name || "") + "</b><small>" + esc(o.area || "") + " · " + esc(String(o.doneAt || "").replace("T", " ")) + '</small></div><b class="t">' + money(o.total) + "</b></div>";
@@ -385,27 +411,56 @@
     if (!fbOK()) return "مش متظبطة (Firebase)";
     return Notification.permission === "granted" ? (S.pushReady ? "مفعّلة" : "جاري التفعيل...") : Notification.permission === "denied" ? "مرفوضة من إعدادات المتصفح" : "غير مفعّلة";
   }
-  function vMe() {
-    var p = S.pilot || {}, th = ld("mrf_theme", "auto");
-    return '<div class="card"><div class="kv"><span>الاسم</span><span>' + esc(p.name) + '</span></div><div class="kv"><span>الموبايل</span><span dir="ltr">' + esc(p.phone) + '</span></div><div class="kv"><span>المركبة</span><span>' + esc(p.vehicle || "—") + '</span></div>' +
-      '<div class="kv"><span>' + "المحفظة" + '</span><span>' + money(p.wallet) + '</span></div><div class="kv"><span>الإشعارات</span><span>' + esc(notifState()) + '</span></div><div class="kv"><span>الإصدار</span><span dir="ltr">' + esc(CFG.APP_VERSION || "") + (CFG.BUILD && CFG.BUILD !== "__BUILD__" ? " · " + esc(CFG.BUILD) : "") + "</span></div></div>" +
-      (pushOn() && notifState() !== "مفعّلة" && (native() || fbOK()) ? '<button class="btn pri" data-push="1" style="margin-bottom:10px">' + ic("bell") + " تفعيل الإشعارات</button>" : "") +
-      '<button class="btn sec" data-themebtn="1" style="margin-bottom:10px">' + ic("moon") + " المظهر: " + (th === "auto" ? "تلقائي" : th === "dark" ? "داكن" : "فاتح") + "</button>" +
-      '<button class="btn dng" data-out="1">' + ic("logout") + " تسجيل الخروج</button>";
-  }
   function pushBanner() {
     if (!pushOn()) return "";
     if (native() ? S.pushReady : (!fbOK() || !("Notification" in self) || Notification.permission === "granted" || Notification.permission === "denied")) return "";
     return '<div class="banner">' + ic("bell") + "<span>فعّل الإشعارات علشان توصلك الطلبات الجديدة حتى والتطبيق مقفول</span><button class=\"btn pri\" data-push=\"1\">تفعيل</button></div>";
   }
+
+  // ---------- صفحات القائمة الجانبية ----------
+  var PAGES = { profile: "الصفحة الشخصية", earnings: "الأرباح", wallet: "المحفظة", inbox: "البريد الوارد", support: "المساعدة والدعم", about: "حول" };
+  function pageBody(pg) {
+    var p = S.pilot || {};
+    if (pg === "profile") {
+      var th = ld("mrf_theme", "auto");
+      return '<div class="card"><div class="kv"><span>الاسم</span><span>' + esc(p.name) + '</span></div><div class="kv"><span>الموبايل</span><span dir="ltr">' + esc(p.phone) + '</span></div><div class="kv"><span>المركبة</span><span>' + esc(p.vehicle || "—") + '</span></div><div class="kv"><span>حالة الشغل</span><span>' + (p.working ? "يعمل الآن" : "لا يعمل") + '</span></div><div class="kv"><span>التنبيهات</span><span>' + esc(notifState()) + "</span></div></div>" +
+        (pushOn() && notifState() !== "مفعّلة" && (native() || fbOK()) ? '<button class="btn pri" data-push="1" style="margin-bottom:10px">' + ic("bell") + " تفعيل الإشعارات</button>" : "") +
+        '<button class="btn sec" data-themebtn="1" style="margin-bottom:10px">' + ic("moon") + " المظهر: " + (th === "auto" ? "تلقائي" : th === "dark" ? "داكن" : "فاتح") + '</button><button class="btn dng" data-out="1">' + ic("logout") + " تسجيل الخروج</button>";
+    }
+    if (pg === "earnings") {
+      var tk = todayKey(), wk = new Date(Date.now() - 6 * 864e5), p2 = function (n) { return (n < 10 ? "0" : "") + n; }, wkKey = wk.getFullYear() + "-" + p2(wk.getMonth() + 1) + "-" + p2(wk.getDate());
+      var td = S.history.filter(function (h) { return String(h.doneAt || "").slice(0, 10) === tk; }), w7 = S.history.filter(function (h) { return String(h.doneAt || "").slice(0, 10) >= wkKey; });
+      var box = function (t, a) { return '<div class="card"><h3 class="sec">' + t + '</h3><div class="kv"><span>طلبات اتوصّلت</span><span>' + a.length + '</span></div><div class="kv"><span>إجمالي اللي اتحصّل من العملاء</span><span>' + money(a.reduce(function (x, h) { return x + (Number(h.total) || 0); }, 0)) + '</span></div><div class="kv"><span>أرباح التوصيل</span><span>' + money(a.length * DELIVERY_FEE) + "</span></div></div>"; };
+      return box("النهاردة", td) + box("آخر 7 أيام", w7) + '<div class="note">أرباح التوصيل هتتحسب بعد ما الإدارة تحدد قيمة التوصيل. الأرقام دي من آخر ' + S.history.length + " طلب اتسلّم.</div>";
+    }
+    if (pg === "wallet") return '<div class="card" style="text-align:center;padding:26px 14px"><small style="color:var(--mut);font-weight:700">رصيد المحفظة</small><div class="big" style="font-size:34px;font-weight:800;color:var(--or);margin:6px 0">' + money(p.wallet) + '</div><small style="color:var(--mut)">الرصيد بتحدده إدارة الصيدلية.</small></div>';
+    if (pg === "inbox") return '<div class="empty">' + ic("mail") + "<b>مفيش رسائل دلوقتي</b>رسائل وتنبيهات الإدارة هتظهر هنا.</div>";
+    if (pg === "support") {
+      var sp = String(CFG.SUPPORT_PHONE || "").replace(/\D/g, ""), has = /^01\d{9}$/.test(sp);
+      return '<div class="card"><h3 class="sec">محتاج مساعدة؟</h3><p style="color:var(--mut);margin-bottom:12px">لو في مشكلة في طلب أو في التطبيق كلّم إدارة الصيدلية.</p>' +
+        (has ? '<div class="acts"><a class="call" href="tel:' + sp + '">' + ic("phone") + 'اتصال</a><a class="wa" href="https://wa.me/2' + sp.slice(1) + '" target="_blank" rel="noopener">' + ic("msg") + "واتساب</a></div>" : '<div class="note">رقم الدعم لسه مش متحدد.</div>') + "</div>" +
+        '<div class="card"><h3 class="sec">أسئلة سريعة</h3><div class="kv"><span>مفيش طلبات بتظهر؟</span><span>اتأكد إن حالتك «يعمل الآن» والنت شغال</span></div><div class="kv"><span>اتأخرت في طلب؟</span><span>كلّم العميل من أيقونة الاتصال</span></div><div class="kv"><span>قبلت طلب بالغلط؟</span><span>«تنازل عن الطلب» قبل ما توصل الصيدلية</span></div></div>';
+    }
+    return '<div class="card" style="text-align:center"><img src="assets/logo.png" alt="" style="width:92px;height:92px;border-radius:22px;margin:6px auto 10px;display:block"><h3 style="font-size:18px">' + esc(CFG.APP_NAME || "") + '</h3><p style="color:var(--mut);margin:4px 0 12px">تطبيق الطيار لتوصيل طلبات صيدليات د/ مراد صادق</p><div class="kv"><span>الإصدار</span><span dir="ltr">' + esc(CFG.APP_VERSION || "") + (CFG.BUILD && CFG.BUILD !== "__BUILD__" ? " · " + esc(CFG.BUILD) : "") + "</span></div></div>";
+  }
+  function openMenu() {
+    var d = $("drawer"), M = [["profile", "user"], ["earnings", "chart"], ["wallet", "wallet"], ["inbox", "mail"], ["support", "headset"], ["about", "info"]];
+    d.innerHTML = '<div class="dbk" data-menuclose="1"></div><aside class="dpanel"><div class="dh"><img src="assets/logo.png" alt=""><div><b>' + esc(CFG.APP_NAME || "") + "</b><small>نظام توصيل الطلبات المتكامل</small></div></div><nav>" +
+      M.slice(0, 4).map(function (m) { return '<button data-page="' + m[0] + '">' + ic(m[1]) + "<span>" + PAGES[m[0]] + "</span></button>"; }).join("") + '<div class="dsep"></div>' +
+      M.slice(4).map(function (m) { return '<button data-page="' + m[0] + '">' + ic(m[1]) + "<span>" + PAGES[m[0]] + "</span></button>"; }).join("") + '</nav><div class="dft">' + esc(CFG.APP_NAME || "") + " v" + esc(CFG.APP_VERSION || "") + "</div></aside>";
+    d.hidden = false; requestAnimationFrame(function () { d.classList.add("on"); });
+  }
+  function closeMenu() { var d = $("drawer"); if (d.hidden) return; d.classList.remove("on"); setTimeout(function () { d.hidden = true; d.innerHTML = ""; }, 220); }
+
   function viewMain() {
-    var w = S.pilot && S.pilot.working, nNew = w ? S.pool.length : 0, nMine = S.mine.length;
-    var body = S.tab === "new" ? vNew() : S.tab === "mine" ? vMine() : S.tab === "hist" ? vHist() : vMe();
-    var nav = [["new", "home", "الجديدة", nNew, ""], ["mine", "bike", "طلباتي", nMine, "or"], ["hist", "history", "تم التوصيل", 0, ""], ["me", "user", "حسابي", 0, ""]].map(function (t) {
-      return '<button class="' + (S.tab === t[0] ? "on" : "") + '" data-tab="' + t[0] + '">' + ic(t[1]) + "<span>" + t[2] + "</span>" + (t[3] ? '<i class="bd ' + t[4] + '">' + t[3] + "</i>" : "") + "</button>";
-    }).join("");
-    return '<header class="hdr"><img src="assets/logo.png" alt=""><div class="tt"><b>صيدلية د/ مراد صادق</b><small><span class="dot ' + (S.online ? "" : "off") + '"></span>' + (S.online ? "متصل" : "مفيش اتصال") + "</small></div>" +
-      '<button class="shift ' + (w ? "on" : "") + '" data-shift="1">' + (S.keys.shift ? '<span class="spin" style="width:15px;height:15px;border-width:2px"></span>' : ic("power")) + (w ? "يعمل" : "لا يعمل") + "</button></header>" +
+    var w = S.pilot && S.pilot.working, nNew = w ? S.pool.length : 0;
+    var nAcc = S.mine.filter(function (o) { return o.stage === "accepted"; }).length, nDel = S.mine.length - nAcc;
+    var body = S.page ? '<div class="ptitle"><button class="pback" data-back="1" aria-label="رجوع">' + ic("back") + "</button><h2>" + PAGES[S.page] + "</h2></div>" + pageBody(S.page) :
+      S.tab === "new" ? vNew() : S.tab === "acc" ? vAcc() : S.tab === "del" ? vDel() : vHist();
+    var T = [["new", "box", "الطلبات الجديدة", nNew, ""], ["acc", "checkc", "المقبولة", nAcc, "g"], ["del", "scooter", "التوصيل", nDel, "g"], ["hist", "history", "تم التوصيل", 0, ""]];
+    var nav = T.map(function (t) { return '<button class="' + (!S.page && S.tab === t[0] ? "on" : "") + '" data-tab="' + t[0] + '">' + ic(t[1]) + "<span>" + t[2] + "</span>" + (t[3] ? '<i class="bd ' + t[4] + '">' + t[3] + "</i>" : "") + "</button>"; }).join("");
+    return '<header class="hdr"><div class="hrow"><img src="assets/logo.png" alt=""><div class="tt"><b>صيدلية د/ مراد صادق</b><small><span class="dot ' + (S.online ? "" : "off") + '"></span>' + (S.online ? "متصل" : "مفيش اتصال") + '</small></div><button class="burger" data-menu="1" aria-label="القائمة">' + ic("menu") + "</button></div>" +
+      '<button class="shiftbar ' + (w ? "on" : "") + '" data-shift="1">' + (S.keys.shift ? '<span class="spin" style="width:18px;height:18px;border-width:2px"></span>' : ic("power")) + (w ? "يعمل الآن" : "لا يعمل") + "</button></header>" +
       "<main>" + body + '</main><nav class="nav">' + nav + "</nav>";
   }
   function render() {
@@ -421,27 +476,39 @@
     if (S.view !== "main") bindAuth();
     self.scrollTo(0, y);
     var n = S.view === "main" && S.pilot && S.pilot.working ? S.pool.length : 0;
-    document.title = (n ? "(" + n + ") " : "") + "طيار صيدليات مراد";
+    document.title = (n ? "(" + n + ") " : "") + (CFG.APP_NAME || "مراد صادق رايدر");
   }
 
   // ---------- أحداث الشاشة الرئيسية (تفويض) ----------
-  $("app").addEventListener("click", function (e) {
-    var t = e.target.closest("[data-tab],[data-acc],[data-st],[data-rel],[data-shift],[data-push],[data-themebtn],[data-out]"); if (!t) return;
+  function inRoot(t) { return !!t.closest("#app,#drawer"); }
+  document.addEventListener("click", function (e) {
+    var t = e.target.closest("[data-tab],[data-acc],[data-st],[data-rel],[data-shift],[data-push],[data-themebtn],[data-out],[data-menu],[data-menuclose],[data-page],[data-back],[data-inv],[data-chat]"); if (!t || !inRoot(t)) return;
     var d = t.dataset;
-    if (d.tab) { S.tab = d.tab; render(); self.scrollTo(0, 0); }
+    if (d.tab) { S.tab = d.tab; S.page = null; render(); self.scrollTo(0, 0); }
     else if (d.acc) accept(+d.acc);
     else if (d.st) { var s = d.st.split("|"); stage(+s[0], s[1]); }
     else if (d.rel) release(+d.rel);
     else if (d.shift) toggleShift();
     else if (d.push) enablePush(true);
     else if (d.themebtn) { var o = ["auto", "dark", "light"], c = ld("mrf_theme", "auto"); sv("mrf_theme", o[(o.indexOf(c) + 1) % 3]); applyTheme(); render(); }
-    else if (d.out) logout(false);
+    else if (d.out) { closeMenu(); logout(false); }
+    else if (d.menu) openMenu();
+    else if (d.menuclose) closeMenu();
+    else if (d.page) { S.page = d.page; closeMenu(); render(); self.scrollTo(0, 0); }
+    else if (d.back) { S.page = null; render(); }
+    else if (d.chat) toast("الشات مع العميل هيتفعّل قريب 💬");
+    else if (d.inv) {
+      var b = +d.inv, box = t.closest(".od-inv"), on = !box.classList.contains("open"); S.inv[b] = on; box.classList.toggle("open", on);
+      t.querySelector(".tx").textContent = on ? "إخفاء الفاتورة" : "الطلب";
+    }
   });
   document.addEventListener("visibilitychange", function () { if (!document.hidden && S.view === "main") refresh(); });
   self.addEventListener("online", function () { if (S.view === "main") refresh(); });
   self.addEventListener("popstate", function () {
     var sh = $("sheet");
     if (!sh.hidden) { if (sh._cancel) sh._cancel(); else closeSheet(); history.pushState({ r: 2 }, ""); }
+    else if (!$("drawer").hidden) { closeMenu(); history.pushState({ r: 2 }, ""); }
+    else if (S.view === "main" && S.page) { S.page = null; render(); history.pushState({ r: 2 }, ""); }
     else if (S.view === "main" && S.tab !== "new") { S.tab = "new"; render(); history.pushState({ r: 2 }, ""); }
     else if (S.view !== "main") history.pushState({ r: 2 }, "");
     else toast("اضغط رجوع تاني للخروج");
