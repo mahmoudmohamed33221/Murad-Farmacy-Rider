@@ -2,10 +2,13 @@
 // ده الملف الوحيد اللي بتعدل فيه الإعدادات من غير ما تلمس الكود.
 // (self بدل window علشان الملف ده بيتقرا كمان جوه الـ service worker)
 self.APP_CONFIG = {
-  APP_NAME: "طيار صيدليات د/ مراد صادق",
+  APP_NAME: "مراد صادق رايدر",
+
+  // رقم دعم الإدارة (بيظهر في المساعدة والدعم). مثال: "01012345678"
+  SUPPORT_PHONE: "",
 
   // رابط سكربت الطلبات (مشروع Apps Script "اوردارس") - نفس الرابط اللي في تطبيق العميل بالظبط
-  ORDERS_URL: "https://script.google.com/macros/s/AKfycbw9AsKKdtH86dk-1RGTWxbbf51CEYHNm3NeMBMabPBjzXcKBpHKwajsin_av6TbhKY/exec",
+  ORDERS_URL: "https://script.google.com/macros/s/AKfycbx-q9KKu1S5ZTPc6Rpn_o3W2kDz0GBRFYSa6NXciy6rk1_8W-HtGfqY7rLKrO-uGcY/exec",
 
   // مكان الصيدلية: بيتحسب منه "الوصول للصيدلية خلال" اللي بيظهر للعميل، وبيفتح زرار الخريطة
   // خد الإحداثيات: افتح الصيدلية في خرائط جوجل ← اضغط مطولاً على الدبوس ← انسخ الرقمين (مثال 30.0444 , 31.2357)
