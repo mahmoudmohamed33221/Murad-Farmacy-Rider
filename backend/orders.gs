@@ -132,6 +132,7 @@ function txt_(v, max) { return String(v == null ? "" : v).replace(/[\u0000-\u000
 function normPhone_(v) {
   var s = String(v == null ? "" : v).replace(/[٠-٩]/g, function (x) { return "٠١٢٣٤٥٦٧٨٩".indexOf(x); }).replace(/\D/g, "");
   if (s.indexOf("20") === 0 && s.length === 12) s = "0" + s.slice(2);
+  if (/^1[0125]\d{8}$/.test(s)) s = "0" + s;      // الشيت بيشيل الصفر من الأرقام المخزنة كأرقام
   return s;
 }
 function out_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
@@ -273,7 +274,9 @@ function archiveOrder_(sh, r) {
   var row = sh.getRange(r, 1, 1, O_CID).getValues()[0];
   row.push(new Date());
   arc.appendRow(row);
-  arc.getRange(arc.getLastRow(), O.PHONE).setNumberFormat("@").setValue(String(row[O.PHONE - 1]).replace(/'/g, ""));
+  var ar = arc.getLastRow();
+  arc.getRange(ar, O.PHONE).setNumberFormat("@").setValue(normPhone_(row[O.PHONE - 1]));
+  arc.getRange(ar, O.PPHONE).setNumberFormat("@").setValue(normPhone_(row[O.PPHONE - 1]));
   sh.deleteRow(r);
 }
 
@@ -441,8 +444,27 @@ function activeCount_(sh, phone) {
   for (var i = 0; i < v.length; i++) if (Number(v[i][O.BON - 1]) > 0 && isMine_(v[i], phone) && !isTrue_(v[i][O.DONE - 1])) n++;
   return n;
 }
-function orderView_(r, mine) {
-  var o = { bon: Number(r[O.BON - 1]) || 0, date: String(r[O.DATE - 1]), time: String(r[O.TIME - 1]), area: String(r[O.AREA - 1]), items: String(r[O.DETAILS - 1]),
+// تاريخ ووقت الطلب: الشيت بيحوّل وقت "08:38 ص" لقيمة وقت (1899...) فبنقراه من النص المعروض في الخلية (آمن من فروق التوقيت)
+function orderTime_(dispD, dispT, rawD, rawT) {
+  var y = 0, mo = 0, da = 0, h = -1, mi = 0, m;
+  if ((m = String(dispD || "").match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/))) { da = +m[1]; mo = +m[2]; y = +m[3]; }
+  else if ((m = String(dispD || "").match(/(\d{4})-(\d{1,2})-(\d{1,2})/))) { y = +m[1]; mo = +m[2]; da = +m[3]; }
+  else if (rawD instanceof Date) { var p = Utilities.formatDate(rawD, TZ, "yyyy-MM-dd").split("-"); y = +p[0]; mo = +p[1]; da = +p[2]; }
+  var ts = String(dispT || "");
+  if ((m = ts.match(/(\d{1,2}):(\d{2})/))) {
+    h = +m[1]; mi = +m[2];
+    var pm = /م|PM/i.test(ts), am = /ص|AM/i.test(ts);
+    if (pm && h < 12) h += 12; if (am && h === 12) h = 0;
+  } else if (rawT instanceof Date) { var q = Utilities.formatDate(rawT, TZ, "HH:mm").split(":"); h = +q[0]; mi = +q[1]; }
+  if (!y || h < 0) return { day: "", dateTxt: String(dispD || ""), timeTxt: String(dispT || ""), dt: "", ageMin: -1 };
+  var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+  var dt = y + "-" + pad(mo) + "-" + pad(da) + " " + pad(h) + ":" + pad(mi), age = -1;
+  try { age = Math.max(0, Math.floor((Date.now() - Utilities.parseDate(dt, TZ, "yyyy-MM-dd HH:mm").getTime()) / 60000)); } catch (e) {}
+  return { day: AR_DAYS[new Date(y, mo - 1, da).getDay()], dateTxt: pad(da) + "/" + pad(mo) + "/" + y, timeTxt: pad(h % 12 || 12) + ":" + pad(mi) + " " + (h < 12 ? "ص" : "م"), dt: dt, ageMin: age };
+}
+function orderView_(r, mine, dv) {
+  var tm = orderTime_(dv ? dv[O.DATE - 1] : r[O.DATE - 1], dv ? dv[O.TIME - 1] : r[O.TIME - 1], r[O.DATE - 1], r[O.TIME - 1]);
+  var o = { bon: Number(r[O.BON - 1]) || 0, day: tm.day, dateTxt: tm.dateTxt, timeTxt: tm.timeTxt, ageMin: tm.ageMin, area: String(r[O.AREA - 1]), items: String(r[O.DETAILS - 1]),
     total: Number(r[O.TOTAL - 1]) || 0, note: String(r[O.NOTE - 1] || "") };
   if (mine) {
     o.name = String(r[O.NAME - 1]); o.phone = normPhone_(r[O.PHONE - 1]); o.street = String(r[O.STREET - 1] || ""); o.landmark = String(r[O.LANDMARK - 1] || "");
@@ -459,21 +481,21 @@ function riderOrders_(d) {
   if (a.code !== "ok") return authFail_(a);
   var ss = ssOpen_(), sh = ordersSheet_(ss), last = dataLast_(sh), working = isWorking_(a.v), pool = [], mine = [], hist = [];
   if (last >= 2) {
-    var v = sh.getRange(2, 1, last - 1, O_CID).getValues();
+    var rg = sh.getRange(2, 1, last - 1, O_CID), v = rg.getValues(), dvs = rg.getDisplayValues();
     for (var i = 0; i < v.length; i++) {
       var r = v[i];
       if (!(Number(r[O.BON - 1]) > 0)) continue;
-      if (!isTrue_(r[O.ACCEPT - 1])) { if (working) pool.push(orderView_(r, false)); }
-      else if (isMine_(r, a.phone) && !isTrue_(r[O.DONE - 1])) mine.push(orderView_(r, true));
+      if (!isTrue_(r[O.ACCEPT - 1])) { if (working) pool.push(orderView_(r, false, dvs[i])); }
+      else if (isMine_(r, a.phone) && !isTrue_(r[O.DONE - 1])) mine.push(orderView_(r, true, dvs[i]));
     }
   }
   var arc = ss.getSheetByName(ARC_TAB);
   if (arc && arc.getLastRow() >= 2) {
-    var from = Math.max(2, arc.getLastRow() - 150), av = arc.getRange(from, 1, arc.getLastRow() - from + 1, A_AT).getValues();
+    var from = Math.max(2, arc.getLastRow() - 150), rg2 = arc.getRange(from, 1, arc.getLastRow() - from + 1, A_AT), av = rg2.getValues(), adv = rg2.getDisplayValues(), myName = String(a.v[P.NAME - 1]).trim();
     for (var k = av.length - 1; k >= 0 && hist.length < 60; k--) {
-      var q = av[k];
-      if (normPhone_(q[O.PPHONE - 1]) !== a.phone) continue;
-      var h = orderView_(q, false);
+      var q = av[k], pp = normPhone_(q[O.PPHONE - 1]);
+      if (pp ? pp !== a.phone : String(q[O.PNAME - 1]).trim() !== myName) continue;
+      var h = orderView_(q, false, adv[k]);
       h.name = String(q[O.NAME - 1]);
       h.doneAt = q[A_AT - 1] ? Utilities.formatDate(new Date(q[A_AT - 1]), TZ, "yyyy-MM-dd HH:mm") : "";
       hist.push(h);
