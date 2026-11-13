@@ -1,0 +1,6 @@
+{
+  "_ملحوظة": "ده مثال بس. ملفك الحقيقي بتنزله من Firebase (Project settings ← Your apps ← Android ← google-services.json) وتسميه google-services.json وترفعه في جذر المستودع. لازم package_name جواه = com.muradpharmacy.rider",
+  "project_info": { "project_number": "000000000000", "project_id": "your-project-id", "storage_bucket": "your-project-id.appspot.com" },
+  "client": [ { "client_info": { "mobilesdk_app_id": "1:000000000000:android:0000000000000000", "android_client_info": { "package_name": "com.muradpharmacy.rider" } }, "api_key": [ { "current_key": "xxxxxxxx" } ] } ],
+  "configuration_version": "1"
+}
