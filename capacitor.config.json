@@ -1,6 +1,6 @@
 {
   "appId": "com.muradpharmacy.rider",
-  "appName": "طيار مراد",
+  "appName": "مراد صادق رايدر",
   "webDir": "www",
   "plugins": {
     "CapacitorHttp": { "enabled": true },
