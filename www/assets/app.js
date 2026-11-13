@@ -49,12 +49,13 @@
     headset: '<path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/>',
     back: '<path d="M9 6l6 6-6 6"/>',
-    wifi: '<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01"/>'
+    wifi: '<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01"/>',
+    wifiX: '<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="17.5" cy="17.5" r="5.5" fill="#EF4444" stroke="none"/><path d="M15.2 15.2l4.6 4.6M19.8 15.2l-4.6 4.6" stroke="#fff" stroke-width="2.2"/>'
   };
   var ic = function (n) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (P[n] || "") + "</svg>"; };
 
   // ---------- الحالة ----------
-  var S = { view: "splash", tab: "new", page: null, inv: {}, creds: ld("mrf_creds", null), pilot: ld("mrf_pilot", null), pool: [], mine: [], history: [], seen: null, loaded: false,
+  var S = { view: "splash", tab: "new", page: null, inv: {}, queue: ld("mrf_queue", []), acked: [], localDone: ld("mrf_ldone", {}), weak: 0, flushing: false, flushT: null, failN: 0, creds: ld("mrf_creds", null), pilot: ld("mrf_pilot", null), pool: [], mine: [], history: [], seen: null, loaded: false,
     online: true, busy: false, keys: {}, flash: {}, pos: null, geoOn: false, etaSent: {}, etaTxt: {}, token: ld("mrf_token", ""), tokenSent: "", pushReady: false, msg: "", pendT: null, pollT: null, lastSync: 0 };
   var native = function () { return !!(self.Capacitor && self.Capacitor.isNativePlatform && self.Capacitor.isNativePlatform()); };
   var plug = function (n) { return self.Capacitor && self.Capacitor.Plugins && self.Capacitor.Plugins[n]; };
@@ -62,19 +63,19 @@
   var fbOK = function () { var F = CFG.FIREBASE || {}; return !!(F.apiKey && F.projectId && F.messagingSenderId && F.appId && F.vapidKey); };
 
   // ---------- الشبكة ----------
-  function api(action, extra, creds) {
-    var c = creds || S.creds || {};
+  function api(action, extra, creds, ms) {
+    var c = creds || S.creds || {}, t0 = Date.now();
     var body = Object.assign({ action: action, phone: c.phone, password: c.password }, extra || {});
-    var ctl = typeof AbortController !== "undefined" ? new AbortController() : null, t = setTimeout(function () { if (ctl) ctl.abort(); }, 25000);
+    var ctl = typeof AbortController !== "undefined" ? new AbortController() : null, t = setTimeout(function () { if (ctl) ctl.abort(); }, ms || 20000);
     return fetch(CFG.ORDERS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body), redirect: "follow", signal: ctl ? ctl.signal : undefined })
       .then(function (r) { return r.json(); })
       .catch(function () { return { ok: false, status: "network", message: "مفيش اتصال بالنت" }; })
-      .then(function (j) { clearTimeout(t); return j || { ok: false, status: "network", message: "رد غير مفهوم من السيرفر" }; });
+      .then(function (j) { clearTimeout(t); if (j && j.status !== "network" && Date.now() - t0 > 8000) S.weak = Date.now() + 40000; return j || { ok: false, status: "network", message: "رد غير مفهوم من السيرفر" }; });
   }
 
   // ---------- أدوات واجهة ----------
   function toast(msg, kind, ms) {
-    var el = document.createElement("div"); el.className = "toast " + (kind || ""); el.textContent = msg; $("toasts").appendChild(el);
+    var box = $("toasts"); box.innerHTML = ""; var el = document.createElement("div"); el.className = "toast " + (kind || ""); el.textContent = msg; box.appendChild(el);
     setTimeout(function () { el.remove(); }, ms || 3200);
   }
   function vib(p) { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} }
@@ -266,27 +267,28 @@
   // ====================== الشاشة الرئيسية ======================
   function enterMain() {
     stopPending(); S.view = "main"; S.tab = S.tab || "new"; S.page = null; S.loaded = false; S.seen = null;
+    var cc = ld("mrf_cache", null); if (cc && cc.mine && S.creds && cc.phone === S.creds.phone) { S.mine = overlay(cc.mine, cc.history || []).mine; S.history = overlay(cc.mine, cc.history || []).hist; }
     history.replaceState({ r: 1 }, ""); history.pushState({ r: 2 }, "");
     render(); refresh();
     if (S.pollT) clearInterval(S.pollT);
     S.pollT = setInterval(function () { if (!document.hidden) refresh(); }, CFG.POLL_MS || 10000);
     setTimeout(initPush, 800);
+    if (S.queue.length) scheduleFlush(300);
   }
 
   function refresh() {
     if (S.busy || S.view !== "main") return Promise.resolve();
     S.busy = true;
-    return api("riderOrders", { token: S.token }).then(function (r) {
+    return api("riderOrders", { token: S.token }, null, 14000).then(function (r) {
       S.busy = false;
       if (S.view !== "main") return;
       if (!r || !r.ok) {
-        if (r && r.status === "network") { S.online = false; return render(); }
         if (r && /rejected|suspended|pending_approval|wrong_password|not_found/.test(r.status || "")) return handleAuth(r, false);
-        S.online = false; return render();
+        S.online = false; if (!S.loaded) { S.loaded = true; S.pool = []; } return render();
       }
       S.online = true; S.lastSync = Date.now(); S.pilot = r.pilot; sv("mrf_pilot", S.pilot); S.mineStore = r.store || "";
       var oldMine = {}; S.mine.forEach(function (o) { oldMine[o.bon] = 1; });
-      S.pool = r.pool || []; S.mine = r.mine || []; S.history = r.history || [];
+      S.pool = r.pool || []; var ov = overlay(r.mine || [], r.history || []); S.mine = ov.mine; S.history = ov.hist; saveCache();
       var cur = {}, fresh = [];
       S.pool.forEach(function (o) { cur[o.bon] = 1; if (S.seen && !S.seen[o.bon]) fresh.push(o.bon); });
       S.seen = cur;
@@ -307,31 +309,80 @@
     });
   }
   function accept(bon) {
-    var k = "acc" + bon; if (S.keys[k]) return; S.keys[k] = 1; render();
+    var k = "acc" + bon; if (S.keys[k]) return;
+    if (navigator.onLine === false) return toast("مفيش نت — قبول الطلب محتاج اتصال علشان محدش يسبقك عليه", "bad", 4000);
+    S.keys[k] = 1; render();
     api("riderAccept", { bon: bon }).then(function (r) {
       delete S.keys[k];
-      if (r && r.ok) { vib(60); toast("اتقبل الطلب #" + bon + " ✅", "ok"); S.tab = "acc"; S.page = null; S.flash[bon] = 1; refresh(); }
+      if (r && r.ok) {
+        vib(60); toast("اتقبل الطلب #" + bon + " ✅", "ok"); S.online = true; S.tab = "acc"; S.page = null; S.flash[bon] = 1;
+        if (r.order) { S.pool = S.pool.filter(function (x) { return x.bon !== bon; }); S.mine = S.mine.filter(function (x) { return x.bon !== bon; }).concat([r.order]); saveCache(); render(); S.flash = {}; startGeo(); }
+        else refresh();
+      } else if (r && r.status === "network") { S.online = false; toast("النت ضعيف أو فاصل — الطلب لسه ماتقبلش، جرّب تاني", "bad", 4500); render(); }
       else { toast((r && r.message) || "مقدرتش أقبل الطلب", "bad"); if (r && /taken|gone|limit|not_working/.test(r.status || "")) refresh(); else render(); }
     });
   }
   var STAGE_BTN = { accepted: ["prepare", "وصلت الصيدلية", "pri"], preparing: ["deliver", "تم تجهيز الطلب — توصيل الطلب", "pri"], delivering: ["complete", "تم توصيل الطلب", "ok"] };
+  // ---------- الطابور المحلي (أوفلاين) ----------
+  var RANK = { accepted: 0, preparing: 1, delivering: 2 };
+  function saveQueue() { sv("mrf_queue", S.queue); }
+  function saveCache() { sv("mrf_cache", { phone: S.creds && S.creds.phone, mine: S.mine, history: S.history.filter(function (h) { return !h.pending; }), t: Date.now() }); sv("mrf_ldone", S.localDone); }
+  var nowKey = function () { var d = new Date(), p = function (n) { return (n < 10 ? "0" : "") + n; }; return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes()); };
+  var pendingFor = function (bon) { return S.queue.some(function (q) { return q.bon === bon; }); };
+  // بيطبّق الخطوات اللي لسه ماتأكدتش من السيرفر فوق البيانات الجاية منه (علشان الشاشة متتراجعش)
+  function overlay(mine, hist) {
+    var now = Date.now(), ops = S.queue.concat(S.acked.filter(function (a) { return now - a.t < 25000; })), done = {}, st = {};
+    ops.forEach(function (op) { if (op.stage === "complete") done[op.bon] = 1; else { var x = op.stage === "prepare" ? "preparing" : "delivering"; if (!(op.bon in st) || RANK[x] > RANK[st[op.bon]]) st[op.bon] = x; } });
+    var m = mine.filter(function (o) { return !done[o.bon]; }).map(function (o) { if (st[o.bon] && RANK[st[o.bon]] > RANK[o.stage]) o.stage = st[o.bon]; return o; });
+    var have = {}; hist.forEach(function (h) { have[h.bon] = 1; });
+    var extra = [];
+    Object.keys(S.localDone).forEach(function (b) { var e = S.localDone[b]; if (have[b] || (!pendingFor(+b) && now - e.t > 60000)) delete S.localDone[b]; else extra.push(e); });
+    extra.sort(function (a, b) { return b.t - a.t; });
+    return { mine: m, hist: extra.concat(hist) };
+  }
+  function scheduleFlush(ms) { clearTimeout(S.flushT); S.flushT = setTimeout(flush, ms); }
+  function flush() {
+    if (S.flushing || !S.queue.length || !S.creds || S.view !== "main") return;
+    S.flushing = true; var sent = 0;
+    (function next() {
+      var op = S.queue[0];
+      if (!op) { S.flushing = false; S.online = true; S.failN = 0; if (sent) toast("اتبعتت " + sent + (sent > 2 ? " خطوات" : " خطوة") + " للسيرفر ✅", "ok", 3500); saveCache(); render(); refresh(); return; }
+      api("riderStage", { bon: op.bon, stage: op.stage, at: op.at }, null, 25000).then(function (r) {
+        if (r && r.status === "network") { S.flushing = false; S.online = false; S.failN++; render(); return scheduleFlush(Math.min(4000 * S.failN, 30000)); }
+        if (r && /wrong_password|not_found|rejected|suspended|pending_approval|too_many/.test(r.status || "")) { S.flushing = false; return handleAuth(r, false); }
+        S.online = true; S.queue.shift(); saveQueue(); S.acked.push({ bon: op.bon, stage: op.stage, t: Date.now() });
+        if (r && r.ok) sent++; else toast("الطلب #" + op.bon + ": " + ((r && r.message) || "مقدرتش أسجّل الخطوة"), "bad", 5000);
+        next();
+      });
+    })();
+  }
+  setInterval(function () { if (S.queue.length && !S.flushing && S.view === "main") flush(); }, 8000);
+  self.addEventListener("offline", function () { S.online = false; if (S.view === "main") render(); });
+  self.addEventListener("online", function () { if (S.view === "main") { S.online = true; render(); if (S.queue.length) scheduleFlush(200); refresh(); } });
+
   function stage(bon, st) {
     var o = S.mine.filter(function (x) { return x.bon === bon; })[0]; if (!o) return;
-    var k = "st" + bon; if (S.keys[k]) return;
     var run = function () {
-      S.keys[k] = 1; render();
-      api("riderStage", { bon: bon, stage: st }).then(function (r) {
-        delete S.keys[k];
-        if (r && r.ok) {
-          vib(60); toast(st === "complete" ? "تم التوصيل 🎉 تسلم إيدك" : st === "deliver" ? "الطلب في الطريق للعميل 🛵" : "جاري التجهيز — كمّل من تبويب التوصيل", "ok");
-          if (st === "prepare") S.tab = "del"; S.etaSent = {}; refresh();
-        } else { toast((r && r.message) || "مقدرتش أنفّذ الخطوة", "bad"); r && r.status === "network" ? render() : refresh(); }
-      });
+      vib(60);
+      if (st === "complete") {
+        var tot = invTotal(o);
+        S.mine = S.mine.filter(function (x) { return x.bon !== bon; });
+        S.localDone[bon] = { bon: bon, name: o.name, area: o.area, total: tot, doneAt: nowKey(), t: Date.now(), pending: true };
+        S.history = [S.localDone[bon]].concat(S.history.filter(function (h) { return h.bon !== bon; }));
+        S.etaTxt && delete S.etaTxt[bon];
+      } else o.stage = st === "prepare" ? "preparing" : "delivering";
+      if (st === "prepare") S.tab = "del";
+      S.queue.push({ id: Date.now() + "" + Math.floor(Math.random() * 999), bon: bon, stage: st, at: Date.now() });
+      saveQueue(); saveCache(); S.etaSent = {};
+      if (!S.online || navigator.onLine === false) toast("مفيش نت — الخطوة اتحفظت وهتتبعت أول ما النت يرجع", "or", 4500);
+      else toast(st === "complete" ? "تم التوصيل 🎉 تسلم إيدك" : st === "deliver" ? "الطلب في الطريق للعميل 🛵" : "جاري التجهيز — كمّل من تبويب التوصيل", "ok");
+      render(); if (!S.mine.length) stopGeo(); scheduleFlush(0);
     };
     if (st === "complete") confirmSheet({ title: "تأكيد التوصيل", text: "اتأكد إنك سلّمت الطلب وحصّلت المبلغ من العميل:", big: money(invTotal(o)), ok: "تم التوصيل", cls: "ok" }).then(function (y) { if (y) run(); });
     else run();
   }
   function release(bon) {
+    if (navigator.onLine === false) return toast("مفيش نت — التنازل عن الطلب محتاج اتصال", "bad");
     confirmSheet({ title: "التنازل عن الطلب", text: "الطلب هيرجع لقايمة الطلبات الجديدة وهيوصل إشعار لباقي الطيارين.", ok: "تنازل", cls: "dng" }).then(function (y) {
       if (!y) return;
       api("riderRelease", { bon: bon }).then(function (r) {
@@ -372,7 +423,7 @@
   function mineCard(o) {
     var k = "st" + o.bon, sb = STAGE_BTN[o.stage], et = S.etaTxt[o.bon] || "", wa = "https://wa.me/2" + String(o.phone || "").replace(/^0/, "");
     var nm = String(o.name || "").trim().split(/\s+/).slice(0, 3).join(" "), tag = o.stage === "accepted" ? "تم القبول" : o.stage === "preparing" ? "جاري التجهيز" : "جاري التوصيل";
-    return '<div class="card mcard' + (S.flash[o.bon] ? " flash" : "") + '" id="c' + o.bon + '"><div class="mhead"><span class="bon">#' + o.bon + '</span><span class="mtag ' + o.stage + '">' + tag + "</span></div>" +
+    return '<div class="card mcard' + (S.flash[o.bon] ? " flash" : "") + '" id="c' + o.bon + '"><div class="mhead"><span class="bon">#' + o.bon + '</span><span class="mtag ' + o.stage + '">' + tag + "</span>" + (pendingFor(o.bon) ? '<span class="syn">' + ic("clock") + "في انتظار المزامنة</span>" : "") + "</div>" +
       '<div class="cust"><div class="crow"><b class="cname">' + esc(nm) + '</b><div class="cbtns"><a class="ib call" href="tel:' + esc(o.phone) + '" aria-label="اتصال">' + ic("phone") + '</a><a class="ib wa" href="' + esc(wa) + '" target="_blank" rel="noopener" aria-label="واتساب">' + ic("msg") + '</a><button class="ib chat" data-chat="1" aria-label="شات">' + ic("chat") + "</button></div></div>" +
       '<div class="sepl"></div><div class="crow"><div class="addr">' + esc([o.area, o.street].filter(Boolean).join(" — ") || "—") + (o.landmark ? "<small>علامة مميزة: " + esc(o.landmark) + "</small>" : "") + '</div><a class="ib map" href="' + esc(custMap(o)) + '" target="_blank" rel="noopener" aria-label="الموقع على الخريطة">' + ic("pin") + "</a></div></div>" +
       stepsHTML(o.stage) + (et ? '<div class="eta">' + ic("clock") + esc(et) + "</div>" : "") + invBlock(o, true) + (o.note ? '<div class="note">' + esc(o.note) + "</div>" : "") +
@@ -382,6 +433,7 @@
   function vNew() {
     var w = S.pilot && S.pilot.working, h = pushBanner();
     if (!w) return h + '<div class="empty">' + ic("power") + "<b>أنت دلوقتي «لا يعمل»</b>شغّل حالتك علشان تظهرلك الطلبات الجديدة.</div>";
+    if (!S.online && !S.pool.length) return h + '<div class="empty">' + ic("wifiX") + "<b>مفيش اتصال بالنت</b>الطلبات الجديدة هتظهر أول ما النت يرجع.</div>";
     if (!S.loaded) return h + '<div class="empty"><span class="spin"></span></div>';
     if (!S.pool.length) return h + '<div class="empty">' + ic("box") + "<b>مفيش طلبات جديدة دلوقتي</b>هننبّهك بصوت واهتزاز أول ما يوصل طلب (سيب التطبيق مفتوح).</div>";
     return h + '<h3 class="sec">الطلبات الجديدة <small>(الأسرع بيقبل)</small></h3>' + S.pool.map(poolCard).join("");
@@ -401,7 +453,7 @@
     var h = '<div class="sum"><div class="b"><small>طلبات النهاردة</small><b>' + td.length + '</b></div><div class="b"><small>إجمالي التحصيل</small><b>' + num(sum) + "</b></div></div>";
     if (!S.history.length) return h + '<div class="empty">' + ic("history") + "<b>لسه مفيش طلبات متسلّمة</b></div>";
     return h + '<h3 class="sec">آخر الطلبات المتسلّمة</h3>' + S.history.map(function (o) {
-      return '<div class="h-row"><div class="l"><b>#' + o.bon + " · " + esc(o.name || "") + "</b><small>" + esc(o.area || "") + " · " + esc(String(o.doneAt || "").replace("T", " ")) + '</small></div><b class="t">' + money(o.total) + "</b></div>";
+      return '<div class="h-row"><div class="l"><b>#' + o.bon + " · " + esc(o.name || "") + "</b><small>" + esc(o.area || "") + " · " + esc(String(o.doneAt || "").replace("T", " ")) + '</small></div><b class="t">' + money(o.total) + "</b>" + (o.pending ? '<span class="syn">' + ic("clock") + "لسه ماتبعتش</span>" : "") + "</div>";
     }).join("");
   }
   function notifState() {
@@ -452,14 +504,21 @@
   }
   function closeMenu() { var d = $("drawer"); if (d.hidden) return; d.classList.remove("on"); setTimeout(function () { d.hidden = true; d.innerHTML = ""; }, 220); }
 
+  function netState() {
+    var n = S.queue.length;
+    if (!S.online) return { k: "off", i: "wifiX", t: "مفيش اتصال" + (n ? " · " + n + " في الانتظار" : "") };
+    if (n) return { k: "warn", i: "alert", t: "جاري المزامنة (" + n + ")" };
+    if (S.weak > Date.now()) return { k: "warn", i: "alert", t: "النت ضعيف" };
+    return { k: "ok", i: "wifi", t: "متصل" };
+  }
   function viewMain() {
     var w = S.pilot && S.pilot.working, nNew = w ? S.pool.length : 0;
-    var nAcc = S.mine.filter(function (o) { return o.stage === "accepted"; }).length, nDel = S.mine.length - nAcc;
+    var ns = netState(), nAcc = S.mine.filter(function (o) { return o.stage === "accepted"; }).length, nDel = S.mine.length - nAcc;
     var body = S.page ? '<div class="ptitle"><button class="pback" data-back="1" aria-label="رجوع">' + ic("back") + "</button><h2>" + PAGES[S.page] + "</h2></div>" + pageBody(S.page) :
       S.tab === "new" ? vNew() : S.tab === "acc" ? vAcc() : S.tab === "del" ? vDel() : vHist();
     var T = [["new", "box", "الطلبات الجديدة", nNew, ""], ["acc", "checkc", "المقبولة", nAcc, "g"], ["del", "scooter", "التوصيل", nDel, "g"], ["hist", "history", "تم التوصيل", 0, ""]];
     var nav = T.map(function (t) { return '<button class="' + (!S.page && S.tab === t[0] ? "on" : "") + '" data-tab="' + t[0] + '">' + ic(t[1]) + "<span>" + t[2] + "</span>" + (t[3] ? '<i class="bd ' + t[4] + '">' + t[3] + "</i>" : "") + "</button>"; }).join("");
-    return '<header class="hdr"><div class="hrow"><img src="assets/logo.png" alt=""><div class="tt"><b>صيدلية د/ مراد صادق</b><small><span class="dot ' + (S.online ? "" : "off") + '"></span>' + (S.online ? "متصل" : "مفيش اتصال") + '</small></div><button class="burger" data-menu="1" aria-label="القائمة">' + ic("menu") + "</button></div>" +
+    return '<header class="hdr"><div class="hrow"><img src="assets/logo.png" alt=""><div class="tt"><b>صيدلية د/ مراد صادق</b><button class="net ' + ns.k + '" data-net="1">' + ic(ns.i) + "<span>" + ns.t + '</span></button></div><button class="burger" data-menu="1" aria-label="القائمة">' + ic("menu") + "</button></div>" +
       '<button class="shiftbar ' + (w ? "on" : "") + '" data-shift="1">' + (S.keys.shift ? '<span class="spin" style="width:18px;height:18px;border-width:2px"></span>' : ic("power")) + (w ? "يعمل الآن" : "لا يعمل") + "</button></header>" +
       "<main>" + body + '</main><nav class="nav">' + nav + "</nav>";
   }
@@ -482,7 +541,7 @@
   // ---------- أحداث الشاشة الرئيسية (تفويض) ----------
   function inRoot(t) { return !!t.closest("#app,#drawer"); }
   document.addEventListener("click", function (e) {
-    var t = e.target.closest("[data-tab],[data-acc],[data-st],[data-rel],[data-shift],[data-push],[data-themebtn],[data-out],[data-menu],[data-menuclose],[data-page],[data-back],[data-inv],[data-chat]"); if (!t || !inRoot(t)) return;
+    var t = e.target.closest("[data-tab],[data-acc],[data-st],[data-rel],[data-shift],[data-push],[data-themebtn],[data-out],[data-menu],[data-menuclose],[data-page],[data-back],[data-inv],[data-chat],[data-net]"); if (!t || !inRoot(t)) return;
     var d = t.dataset;
     if (d.tab) { S.tab = d.tab; S.page = null; render(); self.scrollTo(0, 0); }
     else if (d.acc) accept(+d.acc);
@@ -496,6 +555,7 @@
     else if (d.menuclose) closeMenu();
     else if (d.page) { S.page = d.page; closeMenu(); render(); self.scrollTo(0, 0); }
     else if (d.back) { S.page = null; render(); }
+    else if (d.net) { var n2 = netState(); toast(n2.t, n2.k === "ok" ? "ok" : n2.k === "off" ? "bad" : "or"); if (S.queue.length) scheduleFlush(0); else refresh(); }
     else if (d.chat) toast("الشات مع العميل هيتفعّل قريب 💬");
     else if (d.inv) {
       var b = +d.inv, box = t.closest(".od-inv"), on = !box.classList.contains("open"); S.inv[b] = on; box.classList.toggle("open", on);
@@ -550,7 +610,7 @@
       if (km < 0.15) show = txt;
       if (S.etaTxt[o.bon] !== show) { S.etaTxt[o.bon] = show; changed = true; }
       var key = o.bon + which;
-      if (S.etaSent[key] !== txt) { S.etaSent[key] = txt; api("riderEta", { bon: o.bon, stage: which, etaText: txt }); }
+      if (S.online && S.etaSent[key] !== txt) { S.etaSent[key] = txt; api("riderEta", { bon: o.bon, stage: which, etaText: txt }); }
     });
     if (changed) render();
   }
