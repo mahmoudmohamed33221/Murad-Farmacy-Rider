@@ -58,7 +58,7 @@ b{font-weight:800}
 .hrow img{width:42px;height:42px;border-radius:11px}
 .hrow .tt{flex:1;min-width:0}
 .hrow .tt b{display:block;font-size:16px;line-height:1.2;font-weight:800}
-.hrow .tt small{color:var(--mut);font-size:11.5px;display:flex;align-items:center;gap:5px}
+
 .burger{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;color:var(--mut)}
 .burger svg{width:26px;height:26px}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block}
@@ -198,10 +198,10 @@ h3.sec small{color:var(--mut);font-weight:600}
 .mtag.preparing,.mtag.delivering{background:rgba(245,179,1,.15);color:#F5B301}
 .cust{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:4px 12px}
 .crow{display:flex;align-items:center;gap:10px;padding:9px 0}
-.cname{flex:1;font-size:15.5px}
-.cbtns{display:flex;gap:8px}
-.ib{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--card);border:1px solid var(--line)}
-.ib svg{width:19px;height:19px}
+.cname{flex:1;font-size:14px}
+.cbtns{display:flex;gap:6px}
+.ib{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--card);border:1px solid var(--line)}
+.ib svg{width:16px;height:16px}
 .ib.call{color:var(--ok);background:var(--oksoft);border-color:transparent}
 .ib.wa{color:#25D366;background:rgba(37,211,102,.14);border-color:transparent}
 .ib.chat{color:#F59E0B;background:rgba(245,158,11,.14);border-color:transparent}
@@ -247,3 +247,14 @@ h3.sec small{color:var(--mut);font-weight:600}
 .dpanel nav button:active{background:var(--card2)}
 .dsep{height:1px;background:var(--line);margin:6px 18px}
 .dft{padding:14px;text-align:center;color:var(--mut);font-size:13px;border-top:1px solid var(--line);padding-bottom:calc(14px + var(--sab))}
+
+/* مؤشر الاتصال */
+.net{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;margin-top:1px;color:var(--ok)}
+.net svg{width:17px;height:17px}
+.net.off{color:var(--bad)}
+.net.warn{color:#F5B301}
+.net.warn svg{animation:nb 1.2s ease-in-out infinite}
+@keyframes nb{50%{opacity:.4}}
+.syn{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:#F5B301;background:rgba(245,179,1,.14);padding:2px 8px;border-radius:99px;margin-inline:6px}
+.syn svg{width:12px;height:12px}
+.h-row .syn{margin:0}
