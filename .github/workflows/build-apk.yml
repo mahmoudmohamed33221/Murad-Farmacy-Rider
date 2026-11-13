@@ -1,0 +1,96 @@
+name: Build Android APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['www/**', 'capacitor.config.json', 'package.json', 'google-services.json', '.github/workflows/build-apk.yml']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stamp build number
+        run: |
+          BUILD="$(date -u +%Y%m%d%H%M)-${GITHUB_SHA::7}"
+          sed -i "s/__BUILD__/$BUILD/g" www/config.js
+
+      # مفتاح توقيع ثابت: علشان كل نسخة جديدة تتثبت فوق القديمة من غير ما تمسحها
+      - name: Use fixed signing keystore
+        run: |
+          mkdir -p ~/.android
+          cp debug.keystore ~/.android/debug.keystore
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install dependencies
+        run: |
+          npm install
+          if [ -f google-services.json ]; then npm install @capacitor/push-notifications@^8.0.0; echo "Firebase: ON"; else echo "Firebase: OFF (no google-services.json)"; fi
+      - run: npx cap add android
+
+      - name: Add Firebase (google-services) - optional
+        run: |
+          if [ ! -f google-services.json ]; then echo "skip firebase"; exit 0; fi
+          cp google-services.json android/app/google-services.json
+          sed -i "s#classpath 'com.android.tools.build:gradle:[^']*'#&\n        classpath 'com.google.gms:google-services:4.4.4'#" android/build.gradle
+          sed -i "s#^apply plugin: 'com.android.application'#&\napply plugin: 'com.google.gms.google-services'#" android/app/build.gradle
+          grep -n "google-services" android/build.gradle android/app/build.gradle
+
+      - run: npx cap sync android
+
+      - name: Manifest (permissions, notification channel, no auto-backup)
+        run: |
+          M="android/app/src/main/AndroidManifest.xml"
+          python3 - "$M" <<'PY'
+          import sys,re
+          p=sys.argv[1]; s=open(p,encoding='utf-8').read()
+          perms=["ACCESS_COARSE_LOCATION","ACCESS_FINE_LOCATION","POST_NOTIFICATIONS","VIBRATE"]
+          add="".join('\n    <uses-permission android:name="android.permission.%s" />'%x for x in perms if 'android.permission.%s"'%x not in s)
+          s=s.replace('<uses-permission android:name="android.permission.INTERNET" />','<uses-permission android:name="android.permission.INTERNET" />'+add,1)
+          meta='\n        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="murad_orders_v1" />'
+          if 'default_notification_channel_id' not in s: s=s.replace('</application>',meta+'\n    </application>',1)
+          s=s.replace('android:allowBackup="true"','android:allowBackup="false"')
+          open(p,'w',encoding='utf-8').write(s)
+          PY
+          cat "$M"
+
+      - name: Fixed signing config
+        run: |
+          cat >> android/app/build.gradle << 'EOF'
+
+          android {
+              signingConfigs {
+                  debug {
+                      storeFile file('../../debug.keystore')
+                      storePassword 'android'
+                      keyAlias 'androiddebugkey'
+                      keyPassword 'android'
+                  }
+              }
+              buildTypes {
+                  debug {
+                      signingConfig signingConfigs.debug
+                  }
+              }
+          }
+          EOF
+
+      - name: Generate app icons
+        run: npx capacitor-assets generate --android
+
+      - run: chmod +x android/gradlew
+      - name: Build APK
+        run: cd android && ./gradlew assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: murad-rider-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
