@@ -363,8 +363,10 @@ function authPilot_(d) {
 }
 function authFail_(a) { return { ok: false, status: a.code, message: MSG_[a.code] || "خطأ" }; }
 function pilotInfo_(a) {
-  var v = a.v;
-  return { name: String(v[P.NAME - 1]), phone: a.phone, vehicle: String(v[P.VEH - 1] || ""), wallet: Number(v[P.WALLET - 1]) || 0, working: isWorking_(v) };
+  var v = a.v, bd = v[P.BIRTH - 1];
+  if (bd instanceof Date) bd = Utilities.formatDate(bd, TZ, "dd/MM/yyyy");
+  return { name: String(v[P.NAME - 1]), phone: a.phone, vehicle: String(v[P.VEH - 1] || ""), wallet: Number(v[P.WALLET - 1]) || 0, working: isWorking_(v),
+    address: String(v[P.ADDR - 1] || ""), idCard: String(v[P.ID - 1] || ""), birthDate: String(bd || ""), age: String(v[P.AGE - 1] || "") };
 }
 
 // ---- توكن الإشعارات (توكن واحد لكل جهاز: لو الجهاز اتسجل بحساب طيار تاني بنشيله من القديم) ----
@@ -497,7 +499,7 @@ function riderOrders_(d) {
     for (var k = av.length - 1; k >= 0 && hist.length < 150; k--) {
       var q = av[k], pp = normPhone_(q[O.PPHONE - 1]);
       if (pp ? pp !== a.phone : String(q[O.PNAME - 1]).trim() !== myName) continue;
-      var h = orderView_(q, false, adv[k]);
+      var h = orderView_(q, true, adv[k]);
       h.name = String(q[O.NAME - 1]);
       h.doneAt = q[A_AT - 1] ? Utilities.formatDate(new Date(q[A_AT - 1]), TZ, "yyyy-MM-dd HH:mm") : "";
       hist.push(h);
