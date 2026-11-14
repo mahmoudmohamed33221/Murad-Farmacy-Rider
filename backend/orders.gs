@@ -24,6 +24,7 @@ var TZ = "Africa/Cairo";
 var STORE_LOCATION = "";   // 👈 حط هنا لينك لوكيشن الصيدلية (اختياري)، هيتكتب في عمود "لوكيشن المحل" لكل أوردر
 
 var SCRIPT_VERSION = "murad-rider-2026-11-13";
+var DELIVERY_FEE = 0;               // سعر التوصيل (بيظهر في الفاتورة وبيتحسب كأرباح للطيار). 0 لحد ما نحدد طريقة الحساب
 var MAX_ACTIVE = 3;                 // أقصى عدد طلبات ممكن الطيار الواحد يكون شايلها في نفس الوقت (غيّره لو عايز)
 var FCM_CHANNEL = "murad_orders_v1"; // لازم يطابق قناة الإشعارات في تطبيق الطيار
 var LOGIN_MAX_FAILS = 8;            // محاولات دخول غلط قبل القفل المؤقت (10 دقايق)
@@ -268,11 +269,12 @@ function styleOrderRow_(sh, r) {
   sh.getRange(r, O.DETAILS).setWrap(true);
 }
 
-function archiveOrder_(sh, r) {
+function archiveOrder_(sh, r, atMs) {
   var ss = sh.getParent(), arc = ss.getSheetByName(ARC_TAB);
   if (!arc) { setupArchive_(ss); arc = ss.getSheetByName(ARC_TAB); }
   var row = sh.getRange(r, 1, 1, O_CID).getValues()[0];
-  row.push(new Date());
+  var now = Date.now(), at = Number(atMs);
+  row.push(new Date(at > now - 3 * 864e5 && at <= now ? at : now));   // وقت التسليم الحقيقي عند الطيار (لو اتبعت متأخر بسبب النت)
   arc.appendRow(row);
   var ar = arc.getLastRow();
   arc.getRange(ar, O.PHONE).setNumberFormat("@").setValue(normPhone_(row[O.PHONE - 1]));
@@ -491,8 +493,8 @@ function riderOrders_(d) {
   }
   var arc = ss.getSheetByName(ARC_TAB);
   if (arc && arc.getLastRow() >= 2) {
-    var from = Math.max(2, arc.getLastRow() - 150), rg2 = arc.getRange(from, 1, arc.getLastRow() - from + 1, A_AT), av = rg2.getValues(), adv = rg2.getDisplayValues(), myName = String(a.v[P.NAME - 1]).trim();
-    for (var k = av.length - 1; k >= 0 && hist.length < 60; k--) {
+    var from = Math.max(2, arc.getLastRow() - 400), rg2 = arc.getRange(from, 1, arc.getLastRow() - from + 1, A_AT), av = rg2.getValues(), adv = rg2.getDisplayValues(), myName = String(a.v[P.NAME - 1]).trim();
+    for (var k = av.length - 1; k >= 0 && hist.length < 150; k--) {
       var q = av[k], pp = normPhone_(q[O.PPHONE - 1]);
       if (pp ? pp !== a.phone : String(q[O.PNAME - 1]).trim() !== myName) continue;
       var h = orderView_(q, false, adv[k]);
@@ -501,7 +503,7 @@ function riderOrders_(d) {
       hist.push(h);
     }
   }
-  return { ok: true, status: "success", pilot: pilotInfo_(a), pool: pool, mine: mine, history: hist, store: STORE_LOCATION, serverTime: new Date().getTime() };
+  return { ok: true, status: "success", pilot: pilotInfo_(a), pool: pool, mine: mine, history: hist, store: STORE_LOCATION, serverTime: new Date().getTime(), deliveryFee: DELIVERY_FEE };
 }
 
 // ---- قبول طلب: الأسرع ياخده (بيتنفذ جوه القفل فمحدش يقدر يقبل نفس الطلب مرتين) ----
@@ -512,7 +514,7 @@ function riderAccept_(d) {
   if (!r) return { ok: false, status: "gone", message: "الطلب مش موجود (اتلغى أو اتسلّم)" };
   var rv = rowVals_(sh, r);
   if (isTrue_(rv[O.ACCEPT - 1])) {
-    if (normPhone_(rv[O.PPHONE - 1]) === a.phone) return { ok: true, already: true };
+    if (normPhone_(rv[O.PPHONE - 1]) === a.phone) return { ok: true, already: true, order: orderView_(rv, true, sh.getRange(r, 1, 1, O_CID).getDisplayValues()[0]) };
     return { ok: false, status: "taken", message: "طيار تاني سبقك وقبل الطلب ده" };
   }
   if (activeCount_(sh, a.phone) >= MAX_ACTIVE) return { ok: false, status: "limit", message: "معاك " + MAX_ACTIVE + " طلبات شغالة، خلّصهم الأول" };
@@ -520,7 +522,8 @@ function riderAccept_(d) {
   sh.getRange(r, O.PNAME).setValue(String(a.v[P.NAME - 1]));
   sh.getRange(r, O.PPHONE).setNumberFormat("@").setValue(a.phone);
   try { styleOrderRow_(sh, r); } catch (e) {}
-  return { ok: true, bon: Number(d.bon) };
+  var nv = rowVals_(sh, r);
+  return { ok: true, bon: Number(d.bon), order: orderView_(nv, true, sh.getRange(r, 1, 1, O_CID).getDisplayValues()[0]) };
 }
 
 // ---- مراحل الطلب: الطيار هو اللي بيحركها (تجهيز ← توصيل ← تم التوصيل) ----
@@ -538,7 +541,7 @@ function riderStage_(d) {
     if (!isTrue_(rv[O.PREP - 1])) sh.getRange(r, O.PREP).setValue(true);
     if (!isTrue_(rv[O.DELIV - 1])) sh.getRange(r, O.DELIV).setValue(true);
     sh.getRange(r, O.DONE).setValue(true);
-    archiveOrder_(sh, r);                       // بيتنقل لـ "الطلبات المكتملة" (التعديل من السكربت مبيشغّلش onEdit، فبنؤرشف هنا بإيدينا)
+    archiveOrder_(sh, r, d.at);                 // بيتنقل لـ "الطلبات المكتملة" (التعديل من السكربت مبيشغّلش onEdit، فبنؤرشف هنا بإيدينا)
     return { ok: true, stage: "complete" };
   }
   try { styleOrderRow_(sh, r); } catch (e) {}
