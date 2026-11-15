@@ -380,3 +380,39 @@ img{-webkit-user-drag:none;pointer-events:none}
 .dp-row .txt p{font-size:11.5px;color:var(--mut);margin-top:1px}
 .end-shift-btn{position:relative;z-index:1;background:linear-gradient(135deg,#7f1d1d,#991b1b);border:1px solid rgba(239,68,68,.3);color:#fff;width:100%;padding:14px 8px;border-radius:12px;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 12px rgba(0,0,0,.3)}
 .end-shift-btn:active{transform:scale(.97)}
+
+/* ---------- نسخة 6 ---------- */
+.ahead{display:flex;align-items:center;gap:8px;grid-template-columns:none}
+.ahead .amid{flex:1;display:flex;justify-content:center;min-width:0}
+.ahead .aside{flex:none}
+
+/* ساعة التأخير المصغّرة (يوم : ساعة : دقيقة) */
+.mclk{display:inline-flex;align-items:flex-end;gap:3px;color:var(--ok);line-height:1}
+.mclk.y{color:#F5B301}.mclk.r{color:var(--bad)}
+.mclk .g{text-align:center;min-width:19px}
+.mclk small{display:block;font-size:8.5px;color:var(--mut);font-weight:700;line-height:1.2}
+.mclk b{display:block;font-size:14px;font-weight:800;letter-spacing:.3px;font-variant-numeric:tabular-nums;line-height:1.15}
+.mclk i{font-style:normal;font-size:13px;font-weight:800;color:var(--mut);padding-bottom:1px}
+.ahead>.mclk{padding:3px 8px;background:var(--card2);border:1px solid var(--line);border-radius:10px;flex:none}
+
+/* شريط اليوم / الساعة / التأخير في الكارت المقفول */
+.tc3{display:grid;grid-template-columns:1.7fr 1fr 1.25fr}
+.tc3>div{padding:5px 3px}
+.tc3 b{font-size:12px;white-space:nowrap}
+.tc3 b span{display:inline;font-size:11px;font-weight:700;color:var(--mut)}
+.tc3 .mclk{margin-top:1px}
+.tc3 .mclk b{font-size:13px}
+
+/* بيانات العميل جوه الفاتورة (شكل الفاتورة الورقية) */
+.ic-sec{padding:2px 2px 0}
+.ic-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dotted var(--mut)}
+.ic-txt{flex:1;min-width:0}
+.ic-lbl{display:block;font-size:14px;font-weight:800}
+.ic-name{display:block;font-size:13px;font-weight:600;margin-top:1px}
+.ic-addr{font-size:13px;line-height:1.55;word-break:break-word}
+.ic-addr b{font-weight:800}
+.ic-txt small{display:block;font-size:11px;color:var(--mut);margin-top:1px}
+.ic-row .cbtns{flex:none}
+.inv-sub{font-size:12px;font-weight:700;color:var(--fg);margin:8px 0 4px;text-align:center}
+.tcard.sm .mclk small{font-size:8.5px;font-weight:700;margin:0}
+.tcard.sm .mclk .g{min-width:19px}
