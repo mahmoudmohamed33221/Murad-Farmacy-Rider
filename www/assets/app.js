@@ -731,7 +731,6 @@
     return { k: "ok", n: 0 };
   }
   function netBtn(ns) {
-    if (ns.k === "ok") return "";
     return '<button class="netb ' + ns.k + '" data-net="1" aria-label="حالة الاتصال">' + ic(ns.k === "off" ? "wifiX" : "wifi") + (ns.n ? '<i class="nb-c">' + ns.n + "</i>" : "") + (ns.k === "warn" ? '<span class="nb-t">' + ic("alert") + "</span>" : "") + "</button>";
   }
   var TITLES = { new: "الطلبات الجديدة", acc: "الطلبات المقبولة", del: "التوصيل", hist: "تم التوصيل", day: "حول اليوم" };
