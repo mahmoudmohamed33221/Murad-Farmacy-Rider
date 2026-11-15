@@ -482,3 +482,16 @@ img{-webkit-user-drag:none;pointer-events:none}
 .tc3>div>small{line-height:14px}
 .tc3>div>b{margin-top:10px}
 .tcard.sm .mclk .g small{height:10px;line-height:10px}
+
+/* ---------- نسخة 8 ---------- */
+/* اليوم/التاريخ والساعة والعداد على نفس الخط بالظبط (المحاذاة بالبناء مش بالخط) */
+.tc3>div>b{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:11px;height:18px;line-height:18px}
+.tc3 .mclk{position:relative;display:flex;justify-content:center;align-items:center;gap:3px;height:18px;margin:11px 0 0}
+.tcard.sm .mclk .g{position:relative;min-width:19px}
+.tcard.sm .mclk .g small{position:absolute;top:-10px;left:0;right:0;height:10px;line-height:10px;font-size:8.5px;margin:0;pointer-events:none}
+.tc3 .mclk .g b{display:block;margin:0;height:18px;line-height:18px;font-size:13px}
+.tc3 .mclk i{line-height:18px;padding:0}
+
+/* الفاتورة: عمودي العدد وسعر القطعة أوسع شوية علشان آخر حرف ما يطلعش برّه السطر */
+.inv-t th{word-break:keep-all;overflow-wrap:normal;white-space:normal}
+.inv-t th:nth-child(2){width:16.5%}.inv-t th:nth-child(3){width:13%}.inv-t th:nth-child(4){width:17%}
