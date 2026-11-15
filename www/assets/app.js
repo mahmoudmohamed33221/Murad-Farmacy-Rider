@@ -350,7 +350,7 @@
     S.flushing = true; var sent = 0;
     (function next() {
       var op = S.queue[0];
-      if (!op) { S.flushing = false; S.online = true; S.failN = 0; if (sent) toast("اتبعتت " + sent + (sent > 2 ? " خطوات" : " خطوة") + " للسيرفر ✅", "ok", 3500); saveCache(); render(); refresh(); return; }
+      if (!op) { S.flushing = false; S.online = true; S.failN = 0; saveCache(); render(); refresh(); return; }
       api("riderStage", { bon: op.bon, stage: op.stage, at: op.at }, null, 25000).then(function (r) {
         if (r && r.status === "network") { S.flushing = false; S.online = false; S.failN++; render(); return scheduleFlush(Math.min(4000 * S.failN, 30000)); }
         if (r && /wrong_password|not_found|rejected|suspended|pending_approval|too_many/.test(r.status || "")) { S.flushing = false; return handleAuth(r, false); }
@@ -379,8 +379,7 @@
       if (st === "prepare") S.tab = "del";
       S.queue.push({ id: Date.now() + "" + Math.floor(Math.random() * 999), bon: bon, stage: st, at: Date.now() });
       saveQueue(); saveCache(); S.etaSent = {};
-      if (!S.online || navigator.onLine === false) toast("مفيش نت — الخطوة اتحفظت وهتتبعت أول ما النت يرجع", "or", 4500);
-      else toast(st === "complete" ? "تم التوصيل 🎉 تسلم إيدك" : st === "deliver" ? "الطلب في الطريق للعميل 🛵" : "جاري التجهيز — كمّل من تبويب التوصيل", "ok");
+      toast(st === "complete" ? "تم التوصيل 🎉 تسلم إيدك" : st === "deliver" ? "الطلب في الطريق للعميل 🛵" : "جاري التجهيز — كمّل من تبويب التوصيل", "ok");
       render(); if (!S.mine.length) stopGeo(); scheduleFlush(0);
     };
     if (st === "complete") confirmSheet({ title: "تأكيد التوصيل", text: "اتأكد إنك سلّمت الطلب وحصّلت المبلغ من العميل:", big: money(invTotal(o)), ok: "تم التوصيل", cls: "ok" }).then(function (y) { if (y) run(); });
@@ -399,10 +398,10 @@
   // ---------- العرض ----------
   function custSection(c) {
     var nm = String(c.name || "").trim().split(/\s+/).slice(0, 3).join(" "), wa = "https://wa.me/2" + String(c.phone || "").replace(/^0/, "");
-    var btns = c.phone ? '<div class="cbtns"><a class="ib call" href="tel:' + esc(c.phone) + '" aria-label="اتصال">' + ic("phone") + '</a><a class="ib wa" href="' + esc(wa) + '" target="_blank" rel="noopener" aria-label="واتساب">' + ic("wa") + '</a><button class="ib chat" data-chat="1" aria-label="رسالة">' + ic("chat") + "</button></div>" : "";
+    var btns = c.phone ? '<div class="cbtns sm"><a class="ib call" href="tel:' + esc(c.phone) + '" aria-label="اتصال">' + ic("phone") + '</a><a class="ib wa" href="' + esc(wa) + '" target="_blank" rel="noopener" aria-label="واتساب">' + ic("wa") + '</a><button class="ib chat" data-chat="1" aria-label="رسالة">' + ic("chat") + "</button></div>" : "";
     var addr = [c.area, c.street].filter(Boolean).join(" — ");
-    return '<div class="ic-sec"><div class="ic-row"><div class="ic-txt"><b class="ic-lbl">اسم العميل :</b><span class="ic-name">' + esc(nm || "—") + "</span></div>" + btns + "</div>" +
-      (addr || c.landmark ? '<div class="ic-row"><div class="ic-txt"><div class="ic-addr"><b>العنوان :</b> ' + esc(addr || "—") + "</div>" + (c.landmark ? "<small>علامة مميزة : " + esc(c.landmark) + "</small>" : "") + '</div><a class="ib map" href="' + esc(custMap(c)) + '" target="_blank" rel="noopener" aria-label="الموقع على الخريطة">' + ic("pin") + "</a></div>" : "") + "</div>";
+    return '<div class="ic-sec"><div class="ic-row"><div class="ic-txt"><span class="ic-lbl">العميل</span><b class="ic-name">' + esc(nm || "—") + "</b></div>" + btns + "</div>" +
+      (addr || c.landmark ? '<div class="ic-row"><div class="ic-txt"><span class="ic-lbl">العنوان :</span><div class="ic-addr">' + esc(addr || "—") + "</div>" + (c.landmark ? "<small>علامة مميزة : " + esc(c.landmark) + "</small>" : "") + '</div><a class="ib map sm" href="' + esc(custMap(c)) + '" target="_blank" rel="noopener" aria-label="الموقع على الخريطة">' + ic("pin") + "</a></div>" : "") + "</div>";
   }
   function invoiceTable(o, withShip, cust) {
     var L = parseLines(o.items), tot = invTotal(o);
@@ -410,7 +409,7 @@
       return '<tr><td class="inv-n">' + esc(l.n) + (l.ex ? '<span class="inv-bx">+' + l.ex + " " + esc(l.w) + "</span>" : "") + "</td><td>" + (l.raw ? "-" : num(l.p)) + "</td><td>" + (l.raw ? "-" : l.q) + "</td><td><b>" + (l.raw ? "-" : num(l.t)) + "</b></td></tr>";
     }).join("");
     if (withShip) rows += '<tr class="ship"><td class="inv-n">التوصيل</td><td>—</td><td>—</td><td><b>' + num(S.fee) + "</b></td></tr>";
-    return (cust ? custSection(cust) : "") + '<div class="inv-sub">فاتورة الطلب رقم ' + o.bon + (o.dateTxt ? " - " + esc((o.day ? o.day + " " : "") + o.dateTxt) : "") + (o.timeTxt ? " - " + esc(o.timeTxt) : "") + "</div>" +
+    return (cust ? custSection(cust) : "") + '<div class="inv-sub"><span>فاتورة الطلب رقم ' + o.bon + "</span>" + (o.dateTxt ? "<span>" + esc((o.day ? o.day + " " : "") + o.dateTxt) + "</span>" : "") + (o.timeTxt ? "<span>" + esc(o.timeTxt) + "</span>" : "") + "</div>" +
       '<table class="inv-t"><thead><tr><th class="inv-n">اسم الصنف</th><th>سعر القطعة</th><th>العدد</th><th>الإجمالي</th></tr></thead><tbody>' + rows +
       '</tbody><tfoot><tr><td colspan="4"><div class="inv-f"><span>الإجمالي النهائي</span><b>' + num(tot + (withShip ? 0 : -(Number(S.fee) || 0))) + " ج.م</b></div></td></tr></tfoot></table>";
   }
@@ -439,14 +438,18 @@
   // كارت واحد بيتفتح في نفس الوقت (الهيدر بيفتح، والسهم بيقفل)
   function accCard(o, tagHTML, bodyFn, opt) {
     opt = opt || {}; var open = S.open === o.bon, E = open ? "div" : "button";
-    var area = open && opt.hideAreaOpen ? "" : '<span class="tag or ap">' + ic("pin") + esc(o.area || "—") + "</span>";
-    return '<div class="card ac' + (open ? " open" : "") + '" id="c' + o.bon + '"><' + E + ' class="ahead"' + (open ? "" : ' data-open="' + o.bon + '"') + '><span class="bon">#' + o.bon + "</span>" + (open && opt.clk ? miniClock(o) : "") + '<span class="amid">' + area + '</span><span class="aside">' + tagHTML +
-      (open ? '<button class="arw" data-close="1" aria-label="قفل">' + ic("chev") + "</button>" : '<span class="arw">' + ic("chev") + "</span>") + "</" + E + '><div class="glowln"></div>' +
+    var hideA = open && opt.hideAreaOpen, area = hideA ? "" : '<span class="tag or ap">' + ic("pin") + esc(o.area || "—") + "</span>";
+    var arw = open ? '<button class="arw" data-close="1" aria-label="قفل">' + ic("chev") + "</button>" : '<span class="arw">' + ic("chev") + "</span>";
+    var inner, mode;
+    if (open && opt.clk && !hideA) { mode = "f4"; inner = '<span class="bon">#' + o.bon + "</span>" + miniClock(o) + '<span class="amid">' + area + '</span><span class="aside">' + tagHTML + arw + "</span>"; }
+    else if (open && opt.clk) { mode = "g3"; inner = '<span class="bon">#' + o.bon + '</span><span class="amid">' + miniClock(o) + '</span><span class="aside">' + tagHTML + arw + "</span>"; }
+    else { mode = "g3"; inner = '<span class="bon">#' + o.bon + '</span><span class="amid">' + area + '</span><span class="aside">' + tagHTML + arw + "</span>"; }
+    return '<div class="card ac' + (open ? " open" : "") + '" id="c' + o.bon + '"><' + E + ' class="ahead ' + mode + '"' + (open ? "" : ' data-open="' + o.bon + '"') + ">" + inner + "</" + E + '><div class="glowln"></div>' +
       (open ? '<div class="abody">' + bodyFn() + "</div>" : (opt.tc || tcardHTML(o))) + "</div>";
   }
   function poolCard(o) {
     var k = "acc" + o.bon, nt = (o.note || "").trim();
-    return accCard(o, '<span class="newtag">طلب جديد</span>', function () {
+    return accCard(o, "", function () {
       return invBlock(o, false) + (nt ? '<div class="note">' + esc(nt) + "</div>" : "") +
         '<button class="btn pri" data-acc="' + o.bon + '" style="margin-top:10px"' + (S.keys[k] ? " disabled" : "") + ">" + (S.keys[k] ? '<span class="spin"></span>' : ic("check") + " قبول الطلب") + "</button>";
     }, { clk: true });
@@ -460,7 +463,7 @@
   }
   function mineCard(o) {
     var k = "st" + o.bon, sb = STAGE_BTN[o.stage], et = S.etaTxt[o.bon] || "", tag = o.stage === "accepted" ? "تم القبول" : o.stage === "preparing" ? "جاري التجهيز" : "جاري التوصيل";
-    return accCard(o, '<span class="mtag ' + o.stage + '">' + tag + "</span>" + (pendingFor(o.bon) ? '<span class="syn">' + ic("clock") + "مزامنة</span>" : ""), function () {
+    return accCard(o, '<span class="mtag ' + o.stage + '">' + tag + "</span>", function () {
       return stepsHTML(o.stage) + (et ? '<div class="eta">' + ic("clock") + esc(et) + "</div>" : "") + invBlock(o, true, o) + (o.note ? '<div class="note">' + esc(o.note) + "</div>" : "") +
         '<button class="btn ' + sb[2] + '" data-st="' + o.bon + "|" + sb[0] + '" style="margin-top:10px"' + (S.keys[k] ? " disabled" : "") + ">" + (S.keys[k] ? '<span class="spin"></span>' : sb[1]) + "</button>" +
         (o.stage === "accepted" ? '<button class="link" data-rel="' + o.bon + '" style="color:var(--bad)">تنازل عن الطلب</button>' : "");
@@ -474,9 +477,10 @@
   function delCard(h) {
     var r = recOf(h.bon), dts = (r && r.deliveredAt) || keyMs(h.doneAt), d = dts ? new Date(dts) : null, o = { bon: h.bon, area: h.area, items: h.items || "", total: h.total, day: h.day, dateTxt: h.dateTxt, timeTxt: h.timeTxt };
     var tc = '<div class="tcard sm tc3"><div><small>اليوم</small><b>' + (d ? AR_D[d.getDay()] + " <span>(" + p2(d.getDate()) + "/" + p2(d.getMonth() + 1) + "/" + d.getFullYear() + ")</span>" : "—") + '</b></div><div><small>الساعة</small><b>' + (d ? fmT(dts) : "—") + '</b></div><div><small>الإجمالي</small><b dir="ltr">' + num(invTotal(o) + feeOf(h) - (Number(S.fee) || 0)) + " ج.م</b></div></div>";
-    return accCard(o, '<span class="mtag done">تم التوصيل</span>' + (h.pending ? '<span class="syn">' + ic("clock") + "لسه ماتبعتش</span>" : ""), function () {
+    return accCard(o, '<span class="mtag done">تم التوصيل</span>', function () {
       var dur = r && r.acceptedAt && r.deliveredAt > r.acceptedAt ? fmHM(r.deliveredAt - r.acceptedAt) : "—";
-      return '<div class="card" style="margin:0 0 4px;padding:4px 12px;box-shadow:none"><div class="kv"><span>وقت الطلب</span><span>' + esc((h.dateTxt || "") + " " + (h.timeTxt || "")) + '</span></div><div class="kv"><span>وقت القبول</span><span>' + (r && r.acceptedAt ? fmT(r.acceptedAt) : "---") + '</span></div><div class="kv"><span>وقت التسليم</span><span>' + (dts ? fmT(dts) : "---") + '</span></div><div class="kv"><span>مدة التوصيل</span><span>' + dur + '</span></div><div class="kv"><span>ربح التوصيل</span><span dir="ltr">' + fm(feeOf(h)) + " ج.م</span></div></div>" +
+      var cell = function (l, v) { return "<div><small>" + l + "</small><b>" + v + "</b></div>"; };
+      return '<div class="itab">' + cell("وقت الطلب", esc((h.timeTxt || "—"))) + cell("وقت القبول", r && r.acceptedAt ? fmT(r.acceptedAt) : "---") + cell("وقت التسليم", dts ? fmT(dts) : "---") + cell("مدة التوصيل", dur) + cell("ربح التوصيل", fm(feeOf(h)) + " ج.م") + cell("إجمالي الفاتورة", num(invTotal(o)) + " ج.م") + "</div>" +
         invBlock(o, true, { name: h.name, phone: h.phone, area: h.area, street: h.street, landmark: h.landmark, cloc: h.cloc });
     }, { tc: tc });
   }
@@ -722,10 +726,13 @@
 
   function netState() {
     var n = S.queue.length;
-    if (!S.online) return { k: "off", i: "wifiX", t: "مفيش اتصال" + (n ? " · " + n + " في الانتظار" : "") };
-    if (n) return { k: "warn", i: "alert", t: "جاري المزامنة (" + n + ")" };
-    if (S.weak > Date.now()) return { k: "warn", i: "alert", t: "النت ضعيف" };
-    return { k: "ok", i: "wifi", t: "متصل" };
+    if (!S.online) return { k: "off", n: n };
+    if (n || S.weak > Date.now()) return { k: "warn", n: n };
+    return { k: "ok", n: 0 };
+  }
+  function netBtn(ns) {
+    if (ns.k === "ok") return "";
+    return '<button class="netb ' + ns.k + '" data-net="1" aria-label="حالة الاتصال">' + ic(ns.k === "off" ? "wifiX" : "wifi") + (ns.n ? '<i class="nb-c">' + ns.n + "</i>" : "") + (ns.k === "warn" ? '<span class="nb-t">' + ic("alert") + "</span>" : "") + "</button>";
   }
   var TITLES = { new: "الطلبات الجديدة", acc: "الطلبات المقبولة", del: "التوصيل", hist: "تم التوصيل", day: "حول اليوم" };
   function viewMain() {
@@ -736,8 +743,7 @@
     var T = [["new", "box", "الطلبات الجديدة", nNew, ""], ["acc", "checkc", "المقبولة", nAcc, "g"], ["del", "scooter", "التوصيل", nDel, "g"], ["hist", "history", "تم التوصيل", 0, ""], ["day", "chart", "حول اليوم", 0, ""]];
     var nav = T.map(function (t) { return '<button class="' + (!S.page && S.tab === t[0] ? "on" : "") + '" data-tab="' + t[0] + '">' + ic(t[1]) + "<span>" + t[2] + "</span>" + (t[3] ? '<i class="bd ' + t[4] + '">' + t[3] + "</i>" : "") + "</button>"; }).join("");
     var title = S.page ? (S.page === "earnhist" ? "سجل الأرباح" : PAGES[S.page]) : TITLES[S.tab];
-    var badge = ns.k === "ok" ? "" : '<button class="net ' + ns.k + '" data-net="1">' + ic(ns.i) + "<span>" + (ns.k === "off" ? "مفيش اتصال" : S.queue.length ? "مزامنة (" + S.queue.length + ")" : "النت ضعيف") + (ns.k === "off" && S.queue.length ? " (" + S.queue.length + ")" : "") + "</span></button>";
-    return '<header class="hdr"><div class="hrow"><img src="assets/logo.png" alt=""><div class="tt"><b>' + esc(title) + "</b>" + badge + '</div><button class="shiftpill ' + (w ? "on" : "") + '" data-shift="1">' + (S.keys.shift ? '<span class="spin" style="width:15px;height:15px;border-width:2px"></span>' : ic("power")) + (w ? "يعمل الآن" : "لا يعمل") + '</button><button class="burger" data-menu="1" aria-label="القائمة">' + ic("menu") + "</button></div></header>" +
+    return '<header class="hdr"><div class="hrow"><img src="assets/logo.png" alt=""><div class="tt"><b>' + esc(title) + "</b></div>" + netBtn(ns) + '<button class="shiftpill ' + (w ? "on" : "") + '" data-shift="1" aria-label="' + (w ? "يعمل الآن" : "لا يعمل") + '">' + (S.keys.shift ? '<span class="spin" style="width:16px;height:16px;border-width:2px"></span>' : ic("power")) + '</button><button class="burger" data-menu="1" aria-label="القائمة">' + ic("menu") + "</button></div></header>" +
       "<main>" + body + '</main><nav class="nav">' + nav + "</nav>";
   }
   function render() {
@@ -776,7 +782,7 @@
     else if (d.eh) ehAct(d.eh);
     else if (d.open) { S.open = +d.open; render(); var cEl = $("c" + S.open); if (cEl) cEl.scrollIntoView({ block: "start", behavior: "smooth" }); }
     else if (d.close) { S.open = null; render(); }
-    else if (d.net) { var n2 = netState(); toast(n2.t, n2.k === "ok" ? "ok" : n2.k === "off" ? "bad" : "or"); if (S.queue.length) scheduleFlush(0); else refresh(); }
+    else if (d.net) { var n2 = netState(); toast(n2.k === "off" ? "مفيش اتصال بالنت" + (n2.n ? " — " + n2.n + " خطوة مستنية" : "") : n2.n ? "جاري إرسال " + n2.n + " خطوة للسيرفر" : "النت ضعيف", n2.k === "off" ? "bad" : "or"); if (S.queue.length) scheduleFlush(0); else refresh(); }
     else if (d.chat) toast("الشات مع العميل هيتفعّل قريب 💬");
     else if (d.inv) {
       var box = t.closest(".inv"), on = !box.classList.contains("open"); S.inv[+d.inv] = on; box.classList.toggle("open", on);
