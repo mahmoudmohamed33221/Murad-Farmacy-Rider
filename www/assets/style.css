@@ -499,3 +499,7 @@ img{-webkit-user-drag:none;pointer-events:none}
 /* ---------- نسخة 9 ---------- */
 .netb.ok{color:var(--ok)}
 .tc3>div>b{transform:translateY(4px)}
+
+/* ---------- نسخة 10: ضبط شارات علامة الشبكة ---------- */
+.nb-c{top:6px}
+.nb-t{right:4px;bottom:6px}
