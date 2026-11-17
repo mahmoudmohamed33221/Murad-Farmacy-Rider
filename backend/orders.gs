@@ -210,7 +210,7 @@ function newOrder_(d) {
   vals[O.BON - 1] = bon; vals[O.DATE - 1] = t.date; vals[O.TIME - 1] = t.time;
   vals[O.NAME - 1] = name; vals[O.PHONE - 1] = phone;
   vals[O.AREA - 1] = txt_(d.gov, 40); vals[O.STREET - 1] = txt_(d.addr, 250); vals[O.LANDMARK - 1] = txt_(d.landmark, 120);
-  vals[O.CLOC - 1] = txt_(d.location, 300); vals[O.DETAILS - 1] = items; vals[O.SLOC - 1] = STORE_LOCATION;
+  vals[O.CLOC - 1] = normLoc_(d.location); vals[O.DETAILS - 1] = items; vals[O.SLOC - 1] = STORE_LOCATION;
   vals[O.NOTE - 1] = txt_(d.notes, 300); vals[O.TOTAL - 1] = total;
   vals[O.ACCEPT - 1] = false; vals[O.PNAME - 1] = ""; vals[O.PPHONE - 1] = ""; vals[O.SHOP_ETA - 1] = "";
   vals[O.PREP - 1] = false; vals[O.DELIV - 1] = false; vals[O.CUST_ETA - 1] = ""; vals[O.DONE - 1] = false;
@@ -222,6 +222,7 @@ function newOrder_(d) {
   [O.ACCEPT, O.PREP, O.DELIV, O.DONE].forEach(function (c) { sh.getRange(r, c).insertCheckboxes().setValue(false); });
   try { styleOrderRow_(sh, r); } catch (e) {}
   try { sh.getRange(r, O.NOTIF).setValue(broadcastToRiders_("#" + bon + " طلب جديد 📦", "في طلب جديد، افتح التطبيق واقبله قبل غيرك", "new_order_" + bon, { type: "new_order", bon: bon })); } catch (e) {}
+  try { var lc = String(vals[O.CLOC - 1] || ""); if (lc) afterLocation_(ss, sh, r, phone, lc); } catch (e) {}   // فهم اللوكيشن (لينك مختصر ← إحداثيات) + حفظه في ورقة العملاء
   return { ok: true, bon: bon };
 }
 
@@ -321,6 +322,48 @@ var MSG_ = {
   suspended_temp: "أنت موقوف مؤقتاً، كلّم الإدارة",
   suspended_permanent: "تم إيقاف حسابك نهائياً"
 };
+
+// =====================================================================
+// ===== لوكيشن العميل ================================================
+// =====================================================================
+var CUST_TAB_ = "العملاء", C_PHONE_ = 3, C_LOC_ = 5;   // ورقة العملاء: عمود 3 رقم الهاتف، عمود 5 لوكيشن العميل
+function coordsFromText_(t) {
+  t = String(t || "");
+  try { t = decodeURIComponent(t); } catch (e) {}
+  var m = t.match(/@(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)/) || t.match(/!3d(-?\d{1,3}\.\d+)!4d(-?\d{1,3}\.\d+)/) ||
+    t.match(/[?&](?:q|ll|query|destination|center|daddr)=(-?\d{1,3}\.\d+)\s*[,،]\s*(-?\d{1,3}\.\d+)/) || t.match(/\/maps\/(?:place\/)?(-?\d{1,3}\.\d{3,}),(-?\d{1,3}\.\d{3,})/);
+  if (!m) return null;
+  var la = +m[1], lo = +m[2];
+  return Math.abs(la) <= 90 && Math.abs(lo) <= 180 ? { lat: la, lng: lo } : null;
+}
+function normLoc_(raw) { var s = txt_(raw, 400), u = s.match(/https?:\/\/[^\s]+/i); return u ? u[0].replace(/[)\].,،;]+$/, "") : s; }
+// لينك مختصر (maps.app.goo.gl) ← بنمشي ورا التحويلات لحد ما نلاقي الإحداثيات
+function resolveMapsLink_(u) {
+  var cur = u;
+  for (var i = 0; i < 5; i++) {
+    var c = coordsFromText_(cur); if (c) return c;
+    var r = UrlFetchApp.fetch(cur, { followRedirects: false, muteHttpExceptions: true, headers: { "User-Agent": "Mozilla/5.0" } });
+    var code = r.getResponseCode(), h = r.getHeaders() || {}, loc = h["Location"] || h["location"];
+    if (code >= 300 && code < 400 && loc) { cur = /^https?:/i.test(loc) ? loc : "https://www.google.com" + loc; continue; }
+    var body = String(r.getContentText() || "").slice(0, 300000), cb = coordsFromText_(body); if (cb) return cb;
+    var mm = body.match(/https?:\/\/(?:www\.)?google\.[a-z.]+\/maps[^"'<>\s\\]*/i);
+    if (mm && mm[0].replace(/&amp;/g, "&") !== cur) { cur = mm[0].replace(/&amp;/g, "&"); continue; }
+    break;
+  }
+  return null;
+}
+function updateCustomerLoc_(ss, phone, link) {
+  var sh = ss.getSheetByName(CUST_TAB_); if (!sh) return;
+  var n = sh.getLastRow(); if (n < 2) return;
+  var v = sh.getRange(2, C_PHONE_, n - 1, 1).getValues();
+  for (var i = 0; i < v.length; i++) if (normPhone_(v[i][0]) === phone) { sh.getRange(i + 2, C_LOC_).setValue(link); return; }
+}
+function afterLocation_(ss, sh, r, phone, loc) {
+  var link = loc, c = coordsFromText_(loc);
+  if (!c && /^https?:/i.test(loc)) { try { c = resolveMapsLink_(loc); } catch (e) { c = null; } }
+  if (c) { link = "https://www.google.com/maps?q=" + c.lat + "," + c.lng; sh.getRange(r, O.CLOC).setValue(link); }   // لينك بإحداثيات دقيقة (التطبيق بيحسب منه الوصول)
+  updateCustomerLoc_(ss, phone, link);
+}
 
 // ---- الطيارين: قراءة وبحث (آخر صف حقيقي بنعدّه على عمود التليفون لأن القوائم المنسدلة جنب الجدول بتبوّظ getLastRow) ----
 function pilotLast_(sh) {
