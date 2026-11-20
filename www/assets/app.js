@@ -398,13 +398,15 @@
   }
 
   // ---------- العرض ----------
+  // المسافة بالطريق من الصيدلية لموقع العميل (هي نفسها اللي اتحسب عليها التوصيل) — للاطلاع فقط، وبتتحدّث مع الشيت
+  function kmTxt(k) { var n = Number(k); return (isFinite(n) && n > 0 ? n : 0).toFixed(2) + " كم"; }
   function custSection(c) {
     S.mapRef[c.bon || 0] = c;
     var nm = String(c.name || "").trim().split(/\s+/).slice(0, 3).join(" "), wa = "https://wa.me/2" + String(c.phone || "").replace(/^0/, "");
     var btns = c.phone ? '<div class="cbtns sm"><a class="ib call" href="tel:' + esc(c.phone) + '" aria-label="اتصال">' + ic("phone") + '</a><a class="ib wa" href="' + esc(wa) + '" target="_blank" rel="noopener" aria-label="واتساب">' + ic("wa") + '</a><button class="ib chat" data-chat="1" aria-label="رسالة">' + ic("chat") + "</button></div>" : "";
     var addr = [c.area, c.street].filter(Boolean).join(" — ");
     return '<div class="ic-sec"><div class="ic-row"><div class="ic-txt"><span class="ic-lbl">العميل</span><b class="ic-name">' + esc(nm || "—") + "</b></div>" + btns + "</div>" +
-      (addr || c.landmark ? '<div class="ic-row"><div class="ic-txt"><span class="ic-lbl">العنوان :</span><div class="ic-addr">' + esc(addr || "—") + "</div>" + (c.landmark ? "<small>علامة مميزة : " + esc(c.landmark) + "</small>" : "") + '</div><button class="ib map sm" data-map="' + (c.bon || 0) + '" aria-label="الموقع على الخريطة">' + ic("pin") + "</button></div>" : "") + "</div>";
+      (addr || c.landmark ? '<div class="ic-row ic-adr"><div class="ic-txt"><span class="ic-lbl">العنوان :</span><div class="ic-addr">' + esc(addr || "—") + "</div>" + (c.landmark ? "<small>علامة مميزة : " + esc(c.landmark) + "</small>" : "") + '</div><div class="mapcol"><button class="ib map sm" data-map="' + (c.bon || 0) + '" aria-label="الموقع على الخريطة">' + ic("pin") + '</button><span class="kmtag" dir="ltr" title="المسافة من الصيدلية للعميل (للاطلاع فقط)">' + kmTxt(c.km) + "</span></div></div>" : "") + "</div>";
   }
   function invoiceTable(o, withShip, cust) {
     var L = parseLines(o.items), tot = invTotal(o);
@@ -939,4 +941,17 @@
     loginFlow();
   }
   boot();
+})();
+
+// ===== شغل برنامج مش متصفح: ممنوع القائمة المنبثقة (كليك يمين / ضغطة مطولة) والتحديد والسحب (إلا داخل خانات الكتابة علشان اللصق يشتغل) =====
+(function () {
+  var isField = function (t) { return !!(t && t.closest && t.closest("input,textarea,[contenteditable='true']")); };
+  document.addEventListener("contextmenu", function (e) { if (!isField(e.target)) e.preventDefault(); }, true);
+  document.addEventListener("selectstart", function (e) { if (!isField(e.target)) e.preventDefault(); }, true);
+  document.addEventListener("dragstart", function (e) { e.preventDefault(); }, true);
+  ["copy", "cut"].forEach(function (n) { document.addEventListener(n, function (e) { if (!isField(e.target)) e.preventDefault(); }, true); });
+  document.addEventListener("keydown", function (e) {
+    var k = String(e.key || "").toLowerCase();
+    if (e.key === "F12" || ((e.ctrlKey || e.metaKey) && (k === "u" || k === "s" || k === "p")) || ((e.ctrlKey || e.metaKey) && e.shiftKey && (k === "i" || k === "j" || k === "c"))) e.preventDefault();
+  }, true);
 })();
