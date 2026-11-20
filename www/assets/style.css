@@ -505,3 +505,20 @@ img{-webkit-user-drag:none;pointer-events:none}
 /* ---------- نسخة 10: ضبط شارات علامة الشبكة ---------- */
 .nb-c{top:6px}
 .nb-t{right:4px;bottom:6px}
+
+/* ---------- زرار الشيفت: رصاصي = لا يعمل | أخضر فسفوري ثابت = يعمل الان ---------- */
+:root{--neon:#39FF14}
+.shiftpill{background:rgba(154,161,173,.12);color:#9AA1AD;border:1.5px solid #9AA1AD;box-shadow:none}
+.shiftpill.on{background:rgba(57,255,20,.10);color:var(--neon);border-color:var(--neon);box-shadow:0 0 8px 1px rgba(57,255,20,.65),inset 0 0 6px rgba(57,255,20,.35)}
+.shiftpill.on svg{filter:drop-shadow(0 0 3px var(--neon))}
+/* ---------- علامة الشبكة: ألوان ثابتة (من غير حركة) ---------- */
+.wf{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.wf path{stroke:#9AA1AD}
+.wf .wx{fill:#FF2D2D;stroke:none}
+.wf-ok path{stroke:var(--neon);filter:drop-shadow(0 0 2px var(--neon))}
+.wf-off .w0,.wf-off .w1{stroke:#FF2D2D;filter:drop-shadow(0 0 2px #FF2D2D)}
+.wf-chk .w0,.wf-chk .w1,.wf-chk .w2{stroke:#FFD400;filter:drop-shadow(0 0 2px #FFD400)}
+.wf-warn path{stroke:#FFD400;filter:drop-shadow(0 0 2px #FFD400)}
+.netb.ok,.netb.off,.netb.chk,.netb.warn{color:inherit}
+.netb .wf{width:24px;height:24px}
+.netb.warn>svg,.net.warn svg{animation:none}
