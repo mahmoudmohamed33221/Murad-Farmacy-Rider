@@ -399,7 +399,7 @@
 
   // ---------- العرض ----------
   // المسافة بالطريق من الصيدلية لموقع العميل (هي نفسها اللي اتحسب عليها التوصيل) — للاطلاع فقط، وبتتحدّث مع الشيت
-  function kmTxt(k) { var n = Number(k); return (isFinite(n) && n > 0 ? n : 0).toFixed(2) + " كم"; }
+  function kmTxt(k) { var n = Number(k); return (isFinite(n) && n > 0 ? n : 0).toFixed(3) + " كم"; }
   function custSection(c) {
     S.mapRef[c.bon || 0] = c;
     var nm = String(c.name || "").trim().split(/\s+/).slice(0, 3).join(" "), wa = "https://wa.me/2" + String(c.phone || "").replace(/^0/, "");
