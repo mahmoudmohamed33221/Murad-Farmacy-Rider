@@ -287,7 +287,7 @@
         if (r && /rejected|suspended|pending_approval|wrong_password|not_found/.test(r.status || "")) return handleAuth(r, false);
         S.online = false; if (!S.loaded) { S.loaded = true; S.pool = []; } return render();
       }
-      S.online = true; S.lastSync = Date.now(); S.pilot = r.pilot; sv("mrf_pilot", S.pilot); S.mineStore = r.store || "";
+      S.online = true; S.lastSync = Date.now(); S.pilot = r.pilot; if (S.shiftHold && Date.now() < S.shiftHold.until && S.pilot) S.pilot.working = S.shiftHold.want; sv("mrf_pilot", S.pilot); S.mineStore = r.store || "";
       var oldMine = {}; S.mine.forEach(function (o) { oldMine[o.bon] = 1; });
       S.pool = r.pool || []; var ov = overlay(r.mine || [], r.history || []); seedEarn(r.history || []); S.mine = ov.mine; S.history = ov.hist; saveCache();
       var cur = {}, fresh = [], wk = !!(S.pilot && S.pilot.working);
@@ -299,16 +299,18 @@
     });
   }
   function toggleShift() {
-    if (S.keys.shift) return; var want = !(S.pilot && S.pilot.working);
+    if (S.keys.shift || S.shiftBusy) return; var want = !(S.pilot && S.pilot.working);
     if (!want && S.mine.length) return toast("معاك طلب شغال، خلّصه الأول وبعدين وقّف الشغل", "bad");
     confirmSheet(want ? { title: "بدء شيفت العمل", text: "هل تريد بدء شيفت العمل الآن؟", ok: "ابدأ الآن", cls: "pri", no: "ليس الآن", noCls: "dng", center: true }
       : { title: "إنهاء شيفت العمل", text: "هل أنت متأكد من إنهاء شيفت العمل؟", ok: "أنهي الآن", cls: "dng", no: "ليس الآن", noCls: "pri", center: true }).then(function (y) {
       if (!y) return;
-      S.keys.shift = 1; render();
+      // تغيير فوري على الشاشة، والسيرفر بيتحدّث في الخلفية (لو فشل بنرجّع الحالة القديمة)
+      var prev = !want; S.shiftBusy = 1; S.pilot.working = want; sv("mrf_pilot", S.pilot); S.shiftHold = { want: want, until: Date.now() + 15000 };
+      vib(40); toast(want ? "تمام، أنت شغال دلوقتي ✅" : "وقفت الشغل", want ? "ok" : ""); render();
       api("riderShift", { working: want }).then(function (r) {
-        delete S.keys.shift;
-        if (r && r.ok) { S.pilot.working = !!r.working; sv("mrf_pilot", S.pilot); toast(r.working ? "تمام، أنت شغال دلوقتي ✅" : "وقفت الشغل", r.working ? "ok" : ""); refresh(); }
-        else { toast((r && r.message) || "مقدرتش أغيّر الحالة", "bad"); render(); }
+        S.shiftBusy = 0;
+        if (r && r.ok) { S.pilot.working = !!r.working; sv("mrf_pilot", S.pilot); S.shiftHold = { want: !!r.working, until: Date.now() + 6000 }; render(); refresh(); }
+        else { S.shiftHold = null; S.pilot.working = prev; sv("mrf_pilot", S.pilot); toast((r && r.message) || "مقدرتش أغيّر الحالة", "bad"); render(); }
       });
     });
   }
@@ -725,14 +727,20 @@
   }
   function closeMenu() { var d = $("drawer"); if (d.hidden) return; d.classList.remove("on"); setTimeout(function () { d.hidden = true; d.innerHTML = ""; }, 220); }
 
+  // ok = شغال (كله أخضر) | off = فاصل (أول شرطة أحمر + X والباقي رصاصي) | chk = جاري التحقق/إرسال عمليات (شرطتين أصفر والتالتة رصاصي) | warn = النت ضعيف (الكل أصفر)
   function netState() {
     var n = S.queue.length;
     if (!S.online) return { k: "off", n: n };
-    if (n || S.weak > Date.now()) return { k: "warn", n: n };
+    if (n) return { k: "chk", n: n };
+    if (S.weak > Date.now()) return { k: "warn", n: 0 };
     return { k: "ok", n: 0 };
   }
+  function wifiIcon(k) {
+    var X = k === "off" ? '<circle cx="18" cy="18" r="5" class="wx"/><path d="M16 16l4 4M20 16l-4 4" stroke="#fff" stroke-width="2"/>' : "";
+    return '<svg viewBox="0 0 24 24" class="wf wf-' + k + '" aria-hidden="true"><path class="w3" d="M2 9a15 15 0 0 1 20 0"/><path class="w2" d="M5 12.5a10 10 0 0 1 14 0"/><path class="w1" d="M8.5 16a5 5 0 0 1 7 0"/><path class="w0" d="M12 19.5h.01"/>' + X + "</svg>";
+  }
   function netBtn(ns) {
-    return '<button class="netb ' + ns.k + '" data-net="1" aria-label="حالة الاتصال">' + ic(ns.k === "off" ? "wifiX" : "wifi") + (ns.n ? '<i class="nb-c">' + ns.n + "</i>" : "") + (ns.k === "warn" ? '<span class="nb-t">' + ic("alert") + "</span>" : "") + "</button>";
+    return '<button class="netb ' + ns.k + '" data-net="1" aria-label="حالة الاتصال">' + wifiIcon(ns.k) + (ns.n ? '<i class="nb-c">' + ns.n + "</i>" : "") + "</button>";
   }
   var TITLES = { new: "الطلبات الجديدة", acc: "الطلبات المقبولة", del: "التوصيل", hist: "تم التوصيل", day: "حول اليوم" };
   function viewMain() {
