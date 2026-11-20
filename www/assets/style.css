@@ -522,3 +522,16 @@ img{-webkit-user-drag:none;pointer-events:none}
 .netb.ok,.netb.off,.netb.chk,.netb.warn{color:inherit}
 .netb .wf{width:24px;height:24px}
 .netb.warn>svg,.net.warn svg{animation:none}
+
+/* زرار موقع العميل: أصغر ومرفوع لمستوى كلمة "العنوان"، والمسافة تحته */
+.ic-row.ic-adr{align-items:flex-start}
+.ic-adr .mapcol{flex:none;display:flex;flex-direction:column;align-items:center;gap:5px;margin-top:-2px}
+.ic-adr .ib.map.sm{width:26px;height:26px}
+.ic-adr .ib.map.sm svg{width:13px;height:13px}
+.kmtag{display:block;padding:0;border:0;background:none;border-radius:0;font:800 11.5px/1.4 system-ui,"Cairo",sans-serif;white-space:nowrap;color:#39FF14;text-shadow:0 0 6px rgba(57,255,20,.7)}
+:root[data-theme=light] .kmtag{color:#15803D;text-shadow:none}
+
+/* منع التحديد والقائمة المنبثقة والسحب (إلا داخل خانات الكتابة) */
+html,body,*{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+input,textarea,[contenteditable="true"]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+img,a,svg{-webkit-user-drag:none;user-drag:none}
