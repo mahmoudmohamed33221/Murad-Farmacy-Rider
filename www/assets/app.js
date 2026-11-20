@@ -57,7 +57,7 @@
   var ic = function (n) { return '<svg viewBox="0 0 24 24"' + (n === "wa" ? ' class="fi"' : "") + ' aria-hidden="true">' + (P[n] || "") + "</svg>"; };
 
   // ---------- الحالة ----------
-  var S = { view: "splash", tab: "new", page: null, inv: {}, open: null, fee: 0, eh: null, earn: null, shiftStart: 0, accAt: {}, queue: ld("mrf_queue", []), acked: [], localDone: ld("mrf_ldone", {}), weak: 0, flushing: false, flushT: null, failN: 0, creds: ld("mrf_creds", null), pilot: ld("mrf_pilot", null), pool: [], mine: [], history: [], seen: null, loaded: false,
+  var S = { view: "splash", tab: "new", mapRef: {}, nearT: {}, page: null, inv: {}, open: null, fee: 0, eh: null, earn: null, shiftStart: 0, accAt: {}, queue: ld("mrf_queue", []), acked: [], localDone: ld("mrf_ldone", {}), weak: 0, flushing: false, flushT: null, failN: 0, creds: ld("mrf_creds", null), pilot: ld("mrf_pilot", null), pool: [], mine: [], history: [], seen: null, loaded: false,
     online: true, busy: false, keys: {}, flash: {}, pos: null, geoOn: false, etaSent: {}, etaTxt: {}, token: ld("mrf_token", ""), tokenSent: "", pushReady: false, msg: "", pendT: null, pollT: null, lastSync: 0 };
   var native = function () { return !!(self.Capacitor && self.Capacitor.isNativePlatform && self.Capacitor.isNativePlatform()); };
   var plug = function (n) { return self.Capacitor && self.Capacitor.Plugins && self.Capacitor.Plugins[n]; };
@@ -120,7 +120,7 @@
     });
   }
   var num = function (n) { return (Math.round((Number(n) || 0) * 100) / 100).toLocaleString("en-US", { maximumFractionDigits: 2 }); };
-  function invTotal(o) { var sum = parseLines(o.items).reduce(function (a, l) { return a + l.t; }, 0); return (sum > 0 ? sum : Number(o.total) || 0) + (Number(S.fee) || 0); }
+  function invTotal(o) { var sum = parseLines(o.items).reduce(function (a, l) { return a + l.t; }, 0); return (sum > 0 ? sum : Number(o.total) || 0) + (Number(o.fee) || 0); }
   function ageNow(o) { return o.ageMin >= 0 ? o.ageMin + Math.floor((Date.now() - (S.lastSync || Date.now())) / 60000) : -1; }
   function fmtAge(m) {
     if (m < 0) return "—"; if (m < 1) return "الآن"; if (m < 60) return m + " دقيقة";
@@ -289,7 +289,7 @@
       }
       S.online = true; S.lastSync = Date.now(); S.pilot = r.pilot; sv("mrf_pilot", S.pilot); S.mineStore = r.store || "";
       var oldMine = {}; S.mine.forEach(function (o) { oldMine[o.bon] = 1; });
-      S.fee = Number(r.deliveryFee) || 0; S.pool = r.pool || []; var ov = overlay(r.mine || [], r.history || []); seedEarn(r.history || []); S.mine = ov.mine; S.history = ov.hist; saveCache();
+      S.pool = r.pool || []; var ov = overlay(r.mine || [], r.history || []); seedEarn(r.history || []); S.mine = ov.mine; S.history = ov.hist; saveCache();
       var cur = {}, fresh = [], wk = !!(S.pilot && S.pilot.working);
       S.pool.forEach(function (o) { cur[o.bon] = 1; if (wk && S.seen && !S.seen[o.bon]) fresh.push(o.bon); });
       S.seen = wk ? cur : null;      // أول تحميل بعد "يعمل الآن" بيعتبر الطلبات الموجودة معروفة (من غير إشعار)
@@ -371,8 +371,8 @@
       if (st === "complete") {
         var tot = invTotal(o);
         S.mine = S.mine.filter(function (x) { return x.bon !== bon; });
-        S.localDone[bon] = { bon: bon, name: o.name, area: o.area, total: tot, doneAt: nowKey(), t: Date.now(), pending: true, items: o.items, phone: o.phone, street: o.street, landmark: o.landmark, cloc: o.cloc, day: o.day, dateTxt: o.dateTxt, timeTxt: o.timeTxt };
-        addEarn({ bon: bon, name: o.name, area: o.area, orderCost: tot, fee: fee(), acceptedAt: S.accAt[bon] || 0, deliveredAt: Date.now(), status: "completed", items: o.items }); if (S.open === bon) S.open = null;
+        S.localDone[bon] = { bon: bon, name: o.name, area: o.area, total: Number(o.total) || 0, fee: Number(o.fee) || 0, doneAt: nowKey(), t: Date.now(), pending: true, items: o.items, phone: o.phone, street: o.street, landmark: o.landmark, cloc: o.cloc, day: o.day, dateTxt: o.dateTxt, timeTxt: o.timeTxt };
+        addEarn({ bon: bon, name: o.name, area: o.area, orderCost: Number(o.total) || 0, fee: Number(o.fee) || 0, acceptedAt: S.accAt[bon] || 0, deliveredAt: Date.now(), status: "completed", items: o.items }); if (S.open === bon) S.open = null;
         S.history = [S.localDone[bon]].concat(S.history.filter(function (h) { return h.bon !== bon; }));
         S.etaTxt && delete S.etaTxt[bon];
       } else o.stage = st === "prepare" ? "preparing" : "delivering";
@@ -390,28 +390,29 @@
     confirmSheet({ title: "التنازل عن الطلب", text: "الطلب هيرجع لقايمة الطلبات الجديدة وهيوصل إشعار لباقي الطيارين.", ok: "تنازل", cls: "dng" }).then(function (y) {
       if (!y) return;
       api("riderRelease", { bon: bon }).then(function (r) {
-        if (r && r.ok) { var oo = S.mine.filter(function (x) { return x.bon === bon; })[0]; if (oo) addEarn({ bon: bon, name: oo.name, area: oo.area, orderCost: invTotal(oo), fee: 0, acceptedAt: S.accAt[bon] || 0, cancelledAt: Date.now(), status: "cancelled", items: oo.items }); if (S.open === bon) S.open = null; toast("اتنازلت عن الطلب"); refresh(); } else toast((r && r.message) || "مقدرتش أتنازل عن الطلب", "bad");
+        if (r && r.ok) { var oo = S.mine.filter(function (x) { return x.bon === bon; })[0]; if (oo) addEarn({ bon: bon, name: oo.name, area: oo.area, orderCost: Number(oo.total) || 0, fee: 0, acceptedAt: S.accAt[bon] || 0, cancelledAt: Date.now(), status: "cancelled", items: oo.items }); if (S.open === bon) S.open = null; toast("اتنازلت عن الطلب"); refresh(); } else toast((r && r.message) || "مقدرتش أتنازل عن الطلب", "bad");
       });
     });
   }
 
   // ---------- العرض ----------
   function custSection(c) {
+    S.mapRef[c.bon || 0] = c;
     var nm = String(c.name || "").trim().split(/\s+/).slice(0, 3).join(" "), wa = "https://wa.me/2" + String(c.phone || "").replace(/^0/, "");
     var btns = c.phone ? '<div class="cbtns sm"><a class="ib call" href="tel:' + esc(c.phone) + '" aria-label="اتصال">' + ic("phone") + '</a><a class="ib wa" href="' + esc(wa) + '" target="_blank" rel="noopener" aria-label="واتساب">' + ic("wa") + '</a><button class="ib chat" data-chat="1" aria-label="رسالة">' + ic("chat") + "</button></div>" : "";
     var addr = [c.area, c.street].filter(Boolean).join(" — ");
     return '<div class="ic-sec"><div class="ic-row"><div class="ic-txt"><span class="ic-lbl">العميل</span><b class="ic-name">' + esc(nm || "—") + "</b></div>" + btns + "</div>" +
-      (addr || c.landmark ? '<div class="ic-row"><div class="ic-txt"><span class="ic-lbl">العنوان :</span><div class="ic-addr">' + esc(addr || "—") + "</div>" + (c.landmark ? "<small>علامة مميزة : " + esc(c.landmark) + "</small>" : "") + '</div><a class="ib map sm" href="' + esc(custMap(c)) + '" target="_blank" rel="noopener" aria-label="الموقع على الخريطة">' + ic("pin") + "</a></div>" : "") + "</div>";
+      (addr || c.landmark ? '<div class="ic-row"><div class="ic-txt"><span class="ic-lbl">العنوان :</span><div class="ic-addr">' + esc(addr || "—") + "</div>" + (c.landmark ? "<small>علامة مميزة : " + esc(c.landmark) + "</small>" : "") + '</div><button class="ib map sm" data-map="' + (c.bon || 0) + '" aria-label="الموقع على الخريطة">' + ic("pin") + "</button></div>" : "") + "</div>";
   }
   function invoiceTable(o, withShip, cust) {
     var L = parseLines(o.items), tot = invTotal(o);
     var rows = L.map(function (l) {
       return '<tr><td class="inv-n">' + esc(l.n) + (l.ex ? '<span class="inv-bx">+' + l.ex + " " + esc(l.w) + "</span>" : "") + "</td><td>" + (l.raw ? "-" : num(l.p)) + "</td><td>" + (l.raw ? "-" : l.q) + "</td><td><b>" + (l.raw ? "-" : num(l.t)) + "</b></td></tr>";
     }).join("");
-    if (withShip) rows += '<tr class="ship"><td class="inv-n">التوصيل</td><td>—</td><td>—</td><td><b>' + num(S.fee) + "</b></td></tr>";
+    if (withShip) rows += '<tr class="ship"><td class="inv-n">التوصيل</td><td>—</td><td>—</td><td><b>' + num(o.fee) + "</b></td></tr>";
     return (cust ? custSection(cust) : "") + '<div class="inv-sub"><span>فاتورة الطلب رقم ' + o.bon + "</span>" + (o.dateTxt ? "<span>" + esc((o.day ? o.day + " " : "") + o.dateTxt) + "</span>" : "") + (o.timeTxt ? "<span>" + esc(o.timeTxt) + "</span>" : "") + "</div>" +
       '<table class="inv-t"><thead><tr><th class="inv-n">اسم الصنف</th><th>سعر القطعة</th><th>العدد</th><th>الإجمالي</th></tr></thead><tbody>' + rows +
-      '</tbody><tfoot><tr><td colspan="4"><div class="inv-f"><span>الإجمالي النهائي</span><b>' + num(tot + (withShip ? 0 : -(Number(S.fee) || 0))) + " ج.م</b></div></td></tr></tfoot></table>";
+      '</tbody><tfoot><tr><td colspan="4"><div class="inv-f"><span>الإجمالي النهائي</span><b>' + num(tot - (withShip ? 0 : Number(o.fee) || 0)) + " ج.م</b></div></td></tr></tfoot></table>";
   }
   function invBlock(o, withShip, cust) {
     var on = !!S.inv[o.bon];
@@ -473,15 +474,15 @@
   function recOf(bon) { var r = null; if (!S.earn) loadEarn(); Object.keys(S.earn.days).forEach(function (k) { S.earn.days[k].forEach(function (x) { if (x.bon === bon && x.status === "completed") r = x; }); }); return r; }
   function visHist() { return S.history.filter(function (h) { return !S.shiftStart || (h.t || keyMs(h.doneAt)) >= S.shiftStart; }); }
   function itemsSum(h) { var sm = parseLines(h.items).reduce(function (a, l) { return a + l.t; }, 0); return sm > 0 ? sm : Number(h.total) || 0; }
-  function feeOf(h) { var r = recOf(h.bon); return r ? Number(r.fee) || 0 : Number(S.fee) || 0; }
+  function feeOf(h) { var r = recOf(h.bon); return r ? Number(r.fee) || 0 : Number(h.fee) || 0; }
   function delCard(h) {
-    var r = recOf(h.bon), dts = (r && r.deliveredAt) || keyMs(h.doneAt), d = dts ? new Date(dts) : null, o = { bon: h.bon, area: h.area, items: h.items || "", total: h.total, day: h.day, dateTxt: h.dateTxt, timeTxt: h.timeTxt };
-    var tc = '<div class="tcard sm tc3"><div><small>اليوم</small><b>' + (d ? AR_D[d.getDay()] + " <span>(" + p2(d.getDate()) + "/" + p2(d.getMonth() + 1) + "/" + d.getFullYear() + ")</span>" : "—") + '</b></div><div><small>الساعة</small><b>' + (d ? fmT(dts) : "—") + '</b></div><div><small>الإجمالي</small><b dir="ltr">' + num(invTotal(o) + feeOf(h) - (Number(S.fee) || 0)) + " ج.م</b></div></div>";
+    var r = recOf(h.bon), dts = (r && r.deliveredAt) || keyMs(h.doneAt), d = dts ? new Date(dts) : null, o = { bon: h.bon, area: h.area, items: h.items || "", total: h.total, fee: feeOf(h), day: h.day, dateTxt: h.dateTxt, timeTxt: h.timeTxt };
+    var tc = '<div class="tcard sm tc3"><div><small>اليوم</small><b>' + (d ? AR_D[d.getDay()] + " <span>(" + p2(d.getDate()) + "/" + p2(d.getMonth() + 1) + "/" + d.getFullYear() + ")</span>" : "—") + '</b></div><div><small>الساعة</small><b>' + (d ? fmT(dts) : "—") + '</b></div><div><small>الإجمالي</small><b dir="ltr">' + num(invTotal(o)) + " ج.م</b></div></div>";
     return accCard(o, '<span class="mtag done">تم التوصيل</span>', function () {
       var dur = r && r.acceptedAt && r.deliveredAt > r.acceptedAt ? fmHM(r.deliveredAt - r.acceptedAt) : "—";
       var cell = function (l, v) { return "<div><small>" + l + "</small><b>" + v + "</b></div>"; };
       return '<div class="itab">' + cell("وقت الطلب", esc((h.timeTxt || "—"))) + cell("وقت القبول", r && r.acceptedAt ? fmT(r.acceptedAt) : "---") + cell("وقت التسليم", dts ? fmT(dts) : "---") + cell("مدة التوصيل", dur) + cell("ربح التوصيل", fm(feeOf(h)) + " ج.م") + cell("إجمالي الفاتورة", num(invTotal(o)) + " ج.م") + "</div>" +
-        invBlock(o, true, { name: h.name, phone: h.phone, area: h.area, street: h.street, landmark: h.landmark, cloc: h.cloc });
+        invBlock(o, true, { bon: h.bon, name: h.name, phone: h.phone, area: h.area, street: h.street, landmark: h.landmark, cloc: h.cloc });
     }, { tc: tc });
   }
   function vNew() {
@@ -558,7 +559,7 @@
     hist.forEach(function (h) {
       if (h.pending || hasEarn(h.bon, "completed") || (S.earn.tombB && S.earn.tombB[h.bon])) return;
       var ts = keyMs(h.doneAt); if (!ts || S.earn.tomb[dkOf(ts)]) return;
-      var k = dkOf(ts); (S.earn.days[k] = S.earn.days[k] || []).push({ bon: h.bon, name: h.name || "", area: h.area || "", orderCost: Number(h.total) || 0, fee: fee(), acceptedAt: S.accAt[h.bon] || 0, deliveredAt: ts, status: "completed", items: h.items || "" }); ch = true;
+      var k = dkOf(ts); (S.earn.days[k] = S.earn.days[k] || []).push({ bon: h.bon, name: h.name || "", area: h.area || "", orderCost: Number(h.total) || 0, fee: Number(h.fee) || 0, acceptedAt: S.accAt[h.bon] || 0, deliveredAt: ts, status: "completed", items: h.items || "" }); ch = true;
     });
     if (ch) saveEarn();
   }
@@ -764,7 +765,7 @@
   // ---------- أحداث الشاشة الرئيسية (تفويض) ----------
   function inRoot(t) { return !!t.closest("#app,#drawer,#sheet"); }
   document.addEventListener("click", function (e) {
-    var t = e.target.closest("[data-tab],[data-acc],[data-st],[data-rel],[data-shift],[data-push],[data-themebtn],[data-out],[data-menu],[data-menuclose],[data-page],[data-back],[data-inv],[data-chat],[data-net],[data-eh],[data-open],[data-close]"); if (!t || !inRoot(t)) return;
+    var t = e.target.closest("[data-tab],[data-acc],[data-st],[data-rel],[data-shift],[data-push],[data-themebtn],[data-out],[data-menu],[data-menuclose],[data-page],[data-back],[data-inv],[data-chat],[data-net],[data-eh],[data-open],[data-close],[data-map]"); if (!t || !inRoot(t)) return;
     var d = t.dataset;
     if (d.tab) { S.tab = d.tab; S.page = null; render(); self.scrollTo(0, 0); }
     else if (d.acc) accept(+d.acc);
@@ -778,6 +779,7 @@
     else if (d.menuclose) closeMenu();
     else if (d.page) { S.page = d.page; closeMenu(); render(); self.scrollTo(0, 0); }
     else if (d.back) { S.page = null; render(); }
+    else if (d.map) openMap(+d.map);
     else if (d.eh) ehAct(d.eh);
     else if (d.open) { S.open = +d.open; render(); var cEl = $("c" + S.open); if (cEl) cEl.scrollIntoView({ block: "start", behavior: "smooth" }); }
     else if (d.close) { S.open = null; render(); }
@@ -808,7 +810,27 @@
   try { var AppP = plug("App"); if (AppP && AppP.addListener) AppP.addListener("backButton", goBack); } catch (e) {}
 
   // ====================== الموقع والوصول المتوقع ======================
-  function onPos(lat, lng) { S.pos = { lat: lat, lng: lng, t: Date.now() }; }
+  // فتح تطبيق خرائط جوجل مباشرة على موقع العميل (من غير متصفح): نجرّب ملاحة جوجل ← أي تطبيق خرائط ← الرابط العادي
+  function openUrls(urls) {
+    var A = plug("App");
+    if (A && A.openUrl) { var go = function (i) { if (i >= urls.length) return; return Promise.resolve(A.openUrl({ url: urls[i] })).then(function (r) { if (r && r.completed === false) return go(i + 1); }).catch(function () { return go(i + 1); }); }; return go(0); }
+    try { window.open(urls[urls.length - 1], "_blank"); } catch (e) {}
+  }
+  function openMap(bon) {
+    var c = S.mapRef[bon]; if (!c) return; var p = coordsFrom(c.cloc);
+    openUrls(p ? ["google.navigation:q=" + p.lat + "," + p.lng + "&mode=d", "geo:" + p.lat + "," + p.lng + "?q=" + p.lat + "," + p.lng, "https://www.google.com/maps/dir/?api=1&destination=" + p.lat + "," + p.lng + "&travelmode=driving"] : [custMap(c)]);
+  }
+  // لو المندوب قرّب من العميل نبعت للسيرفر يتأكد (بمسافة الطريق مش خط مستقيم) ولو ≤ 25 متر العميل يشوف "المندوب وصل"
+  function nearCheck() {
+    if (!S.online || !S.pos) return;
+    S.mine.forEach(function (o) {
+      if (o.stage !== "delivering") return; var t = coordsFrom(o.cloc); if (!t) return;
+      if (hav(S.pos, t) * 1000 > 90) return;
+      var k = "n" + o.bon; if (Date.now() - (S.nearT[k] || 0) < 12000) return; S.nearT[k] = Date.now();
+      api("riderNear", { bon: o.bon, lat: S.pos.lat, lng: S.pos.lng });
+    });
+  }
+  function onPos(lat, lng) { S.pos = { lat: lat, lng: lng, t: Date.now() }; nearCheck(); }
   function startGeo() {
     if (S.geoOn) return; S.geoOn = true;
     try {
