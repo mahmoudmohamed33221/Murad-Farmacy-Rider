@@ -184,7 +184,9 @@ h3.sec small{color:var(--mut);font-weight:600}
 .inv-t th.inv-n,.inv-t td.inv-n{text-align:start;padding-inline:6px}
 .inv-t th:nth-child(2){width:19%}.inv-t th:nth-child(3){width:13%}.inv-t th:nth-child(4){width:21%}
 .inv-bx{display:block;font-size:11px;color:var(--or2);font-weight:700}
-.inv-t tr.ship td{background:var(--orsoft);color:var(--mut)}
+.inv-t tr.ship td{background:rgba(56,189,248,.10);color:var(--mut)}
+.inv-t tr.ship td.inv-n,.inv-t tr.ship td b{color:#5CCBFF;font-weight:800}
+:root[data-theme=light] .inv-t tr.ship td.inv-n,:root[data-theme=light] .inv-t tr.ship td b{color:#1AA7EC}
 .inv-t tfoot td{padding:0}
 .inv-f{display:flex;justify-content:space-between;align-items:center;padding:9px 10px;font-weight:800}
 .inv-f b{font-size:18px;color:var(--or)}
