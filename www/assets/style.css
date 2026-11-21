@@ -535,3 +535,4 @@ img{-webkit-user-drag:none;pointer-events:none}
 html,body,*{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 input,textarea,[contenteditable="true"]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 img,a,svg{-webkit-user-drag:none;user-drag:none}
+
