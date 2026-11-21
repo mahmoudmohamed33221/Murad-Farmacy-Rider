@@ -61,7 +61,7 @@
     online: true, busy: false, keys: {}, flash: {}, pos: null, geoOn: false, etaSent: {}, etaTxt: {}, token: ld("mrf_token", ""), tokenSent: "", pushReady: false, msg: "", pendT: null, pollT: null, lastSync: 0 };
   var native = function () { return !!(self.Capacitor && self.Capacitor.isNativePlatform && self.Capacitor.isNativePlatform()); };
   var plug = function (n) { return self.Capacitor && self.Capacitor.Plugins && self.Capacitor.Plugins[n]; };
-  var pushOn = function () { return CFG.PUSH_ENABLED === true; };
+  var pushOn = function () { return CFG.PUSH_ENABLED === true || (native() && !!plug("PushNotifications")); };   // لو الـ APK اتبنى بـ Firebase (البلجن موجود) الإشعارات بتشتغل لوحدها حتى لو العلم false
   var fbOK = function () { var F = CFG.FIREBASE || {}; return !!(F.apiKey && F.projectId && F.messagingSenderId && F.appId && F.vapidKey); };
 
   // ---------- الشبكة ----------
@@ -164,7 +164,7 @@
   }
 
   // ====================== شاشات الدخول ======================
-  function setView(v, msg) { S.view = v; S.msg = msg || ""; render(); }
+  function setView(v, msg) { S.view = v; S.msg = msg || ""; render(); if (v !== "splash" && typeof Gate !== "undefined") Gate.start(); }
   function authShell(inner) { return '<div class="auth"><img class="logo" src="assets/logo.png" alt=""><h1>' + esc(CFG.APP_NAME || "تطبيق الطيار") + '</h1>' + inner + "</div>"; }
   function msgBox(kind) { return S.msg ? '<div class="msg ' + (kind || "bad") + '" id="authMsg">' + esc(S.msg) + "</div>" : '<div id="authMsg"></div>'; }
   function field(id, label, icon, attrs, extra) {
@@ -271,6 +271,7 @@
     var cc = ld("mrf_cache", null); if (cc && cc.mine && S.creds && cc.phone === S.creds.phone) { S.mine = overlay(cc.mine, cc.history || []).mine; S.history = overlay(cc.mine, cc.history || []).hist; }
     history.replaceState({ r: 1 }, ""); history.pushState({ r: 2 }, "");
     render(); refresh();
+    if (typeof Gate !== "undefined") Gate.start();   // بوابة الصلاحيات للمندوب المسجّل دخوله
     if (S.pollT) clearInterval(S.pollT);
     S.pollT = setInterval(function () { if (!document.hidden) refresh(); }, CFG.POLL_MS || 10000);
     setTimeout(initPush, 800);
@@ -522,7 +523,7 @@
   }
   function notifState() {
     if (!pushOn()) return "جوه التطبيق بس (صوت واهتزاز)";
-    if (native()) return S.pushReady ? "مفعّلة" : "غير مفعّلة";
+    if (native()) return (S.pushReady ? "مفعّلة" : "غير مفعّلة") + (S.pstep ? " — " + S.pstep : "");
     if (!("Notification" in self)) return "غير مدعومة في المتصفح ده";
     if (!fbOK()) return "مش متظبطة (Firebase)";
     return Notification.permission === "granted" ? (S.pushReady ? "مفعّلة" : "جاري التفعيل...") : Notification.permission === "denied" ? "مرفوضة من إعدادات المتصفح" : "غير مفعّلة";
@@ -884,7 +885,7 @@
   function sendToken(t) {
     if (!t) return; S.token = t; sv("mrf_token", t);
     if (!S.creds) return;
-    api("riderToken", { token: t }).then(function (r) { if (r && r.ok) S.tokenSent = t; });
+    api("riderToken", { token: t }).then(function (r) { if (r && r.ok) { S.tokenSent = t; S.pstep = "التوكن وصل السيرفر ✓"; } else S.pstep = "التوكن ماوصلش السيرفر"; if (S.view === "main") render(); });
   }
   setInterval(function () { if (S.token && S.token !== S.tokenSent && S.view === "main") sendToken(S.token); }, 20000);
 
@@ -901,11 +902,11 @@
   function initNative(ask) {
     var PN = plug("PushNotifications"); if (!PN) { if (ask) toast("الإشعارات مش متاحة في النسخة دي", "bad"); return; }
     Promise.resolve(PN.checkPermissions()).then(function (s) { return s.receive === "granted" ? s : (s.receive === "denied" && !ask ? s : PN.requestPermissions()); }).then(function (s) {
-      if (s.receive !== "granted") { if (ask) toast("لازم تسمح بالإشعارات من إعدادات الموبايل", "bad"); return; }
+      if (s.receive !== "granted") { S.pstep = "الإذن مش مسموح"; if (ask) toast("لازم تسمح بالإشعارات من إعدادات الموبايل", "bad"); return; }
       return Promise.resolve(PN.createChannel({ id: CFG.CHANNEL_ID || "murad_orders_v1", name: "الطلبات الجديدة", description: "إشعارات الطلبات الجديدة", importance: 5, visibility: 1, sound: "default", vibration: true, lights: true })).catch(function () {}).then(function () {
         PN.removeAllListeners();
-        PN.addListener("registration", function (t) { S.pushReady = true; sendToken(t.value); if (S.view === "main") render(); });
-        PN.addListener("registrationError", function () { S.pushReady = false; });
+        PN.addListener("registration", function (t) { S.pushReady = true; S.pstep = "اتسجّل في Firebase"; sendToken(t.value); if (S.view === "main") render(); });
+        PN.addListener("registrationError", function (e) { S.pushReady = false; S.pstep = "فشل التسجيل: " + String((e && (e.error || e.message)) || "").slice(0, 60); if (S.view === "main") render(); });
         PN.addListener("pushNotificationReceived", function () { onPush(); });
         PN.addListener("pushNotificationActionPerformed", function () { S.tab = "new"; refresh(); });
         return PN.register();
@@ -940,6 +941,86 @@
     if (!S.creds) return setView("login");
     loginFlow();
   }
+  // ===== بوابة الصلاحيات: مفيش استخدام للتطبيق قبل ما كل الصلاحيات المطلوبة تتوافق عليها =====
+  var Gate = (function (cfg) {
+    var el = null, started = false, busy = false, done = false, autoTries = 0, timer = null;
+    var P_ = function (n) { try { return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins[n]; } catch (e) { return null; } };
+    var isNative = function () { try { return !!(window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== "web"); } catch (e) { return false; } };
+    var norm = function (s) { return s === "granted" ? "granted" : (s === "denied" ? "denied" : "prompt"); };
+    function needs() {
+      var L = [{
+        id: "loc", icon: "📍", title: "الموقع الدقيق", desc: cfg.locDesc,
+        check: function () {
+          var G = P_("Geolocation");
+          if (G && G.checkPermissions) return Promise.resolve(G.checkPermissions()).then(function (s) { return s.location === "granted" ? "granted" : norm(s.location === "denied" ? "denied" : s.location); });
+          if (navigator.permissions && navigator.permissions.query) return navigator.permissions.query({ name: "geolocation" }).then(function (p) { return norm(p.state); }).catch(function () { return "prompt"; });
+          return Promise.resolve("prompt");
+        },
+        ask: function () {
+          var G = P_("Geolocation");
+          if (G && G.requestPermissions) return Promise.resolve(G.requestPermissions({ permissions: ["location"] }));
+          return new Promise(function (ok) { try { navigator.geolocation.getCurrentPosition(function () { ok(); }, function () { ok(); }, { timeout: 9000 }); } catch (e) { ok(); } });
+        }
+      }];
+      var PN = P_("PushNotifications");
+      if (cfg.notif() && PN) L.unshift({
+        id: "ntf", icon: "🔔", title: "الإشعارات", desc: cfg.ntfDesc,
+        check: function () { return Promise.resolve(PN.checkPermissions()).then(function (s) { return norm(s.receive); }); },
+        ask: function () { return Promise.resolve(PN.requestPermissions()); }
+      });
+      return L;
+    }
+    function css() {
+      if (document.getElementById("mgateCss")) return;
+      var s = document.createElement("style"); s.id = "mgateCss";
+      s.textContent = "#mgate{position:fixed;inset:0;z-index:2147483647;background:#0F1115;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;direction:rtl;overflow:auto;-webkit-user-select:none;user-select:none}" +
+        "#mgate .g-b{width:100%;max-width:380px}#mgate h2{margin:0 0 6px;font-size:1.3rem;text-align:center}#mgate .g-s{margin:0 0 18px;text-align:center;opacity:.75;font-size:.9rem;line-height:1.7}" +
+        "#mgate .g-i{display:flex;align-items:center;gap:12px;padding:14px;border-radius:14px;background:#1A1D24;border:1.5px solid #3a3f4a;margin-bottom:10px}" +
+        "#mgate .g-i.ok{border-color:#39FF14}#mgate .g-i.no{border-color:#FF4D4D}#mgate .g-ic{font-size:1.5rem}#mgate .g-t{flex:1}#mgate .g-t b{display:block;font-size:1rem}#mgate .g-t small{opacity:.7;font-size:.8rem;line-height:1.5}" +
+        "#mgate .g-st{font-weight:800;font-size:1.2rem}#mgate .ok .g-st{color:#39FF14}#mgate .no .g-st{color:#FF4D4D}" +
+        "#mgate button{display:block;width:100%;margin-top:14px;border:0;border-radius:14px;padding:15px;font:inherit;font-weight:800;font-size:1.05rem;background:#39FF14;color:#06210a}" +
+        "#mgate .g-h{margin-top:12px;padding:12px;border-radius:12px;background:rgba(255,77,77,.12);border:1px solid #FF4D4D;font-size:.85rem;line-height:1.8;display:none}";
+      document.head.appendChild(s);
+    }
+    function draw(list, st) {
+      css();
+      if (!el) { el = document.createElement("div"); el.id = "mgate"; document.body.appendChild(el); el.addEventListener("click", function (e) { if (e.target.closest && e.target.closest(".g-go")) { autoTries = 0; ask(); } }); }
+      var denied = st.some(function (s) { return s === "denied"; });
+      el.innerHTML = '<div class="g-b"><h2>صلاحيات مطلوبة</h2><p class="g-s">علشان ' + cfg.appName + ' يشتغل لازم توافق على الصلاحيات دي. مش هتقدر تكمل من غيرها.</p>' +
+        list.map(function (n, i) { var g = st[i] === "granted"; return '<div class="g-i ' + (g ? "ok" : "no") + '"><span class="g-ic">' + n.icon + '</span><span class="g-t"><b>' + n.title + "</b><small>" + n.desc + '</small></span><span class="g-st">' + (g ? "✓" : "✗") + "</span></div>"; }).join("") +
+        '<button type="button" class="g-go">السماح بالصلاحيات</button>' +
+        '<div class="g-h" style="display:' + (denied ? "block" : "none") + '">الصلاحية متقفلة من إعدادات الموبايل. افتح <b>الإعدادات ← التطبيقات ← ' + cfg.appName + ' ← الأذونات</b> وفعّلها، وبعدين ارجع للتطبيق وهيكمل لوحده.</div></div>';
+    }
+    function states() { var list = needs(); return Promise.all(list.map(function (n) { return n.check().catch(function () { return "prompt"; }); })).then(function (st) { return { list: list, st: st }; }); }
+    function refresh() {
+      if (!started || !isNative()) return Promise.resolve(true);
+      return states().then(function (r) {
+        var miss = r.st.some(function (s) { return s !== "granted"; });
+        if (!miss) { if (el) { el.remove(); el = null; } if (!done) { done = true; try { cfg.onGranted && cfg.onGranted(); } catch (e) {} } return true; }
+        done = false; draw(r.list, r.st); return false;
+      });
+    }
+    function ask() {
+      if (busy) return Promise.resolve(); busy = true;
+      return states().then(function (r) {
+        return r.list.reduce(function (p, n, i) { return p.then(function () { return r.st[i] === "granted" ? 0 : n.ask().catch(function () {}); }); }, Promise.resolve());
+      }).then(function () { busy = false; return refresh(); }, function () { busy = false; }).then(function (ok) {
+        if (ok === false) return states().then(function (r) {   // لو لسه ينفع يتسأل (لغى الرسالة) نرجّعها تاني لحد ما يوافق
+          if (r.st.some(function (s) { return s === "prompt"; }) && autoTries++ < 8) setTimeout(function () { if (el && !busy) ask(); }, 800);
+        });
+      });
+    }
+    function start() {
+      if (started || !isNative()) return; started = true;
+      refresh().then(function (ok) { if (!ok) ask(); });
+      var A = P_("App"); if (A && A.addListener) { try { A.addListener("appStateChange", function (s) { if (s && s.isActive) refresh(); }); } catch (e) {} }
+      document.addEventListener("visibilitychange", function () { if (!document.hidden) refresh(); });
+      window.addEventListener("focus", function () { refresh(); });
+      timer = setInterval(function () { if (el) refresh(); }, 1500);
+    }
+    return { start: start, refresh: refresh };
+  })({ appName: "تطبيق المندوب", locDesc: "علشان نحسب الوصول للعميل ونسجّل وصولك تلقائي", ntfDesc: "علشان توصلك الطلبات الجديدة حتى لو التطبيق مقفول", notif: function () { return pushOn(); }, onGranted: function () { if (pushOn()) initNative(true); } });
+
   boot();
 })();
 
