@@ -15,7 +15,7 @@ self.APP_CONFIG = {
   STORE: { lat: null, lng: null, mapUrl: "" },
 
   // إشعارات Firebase (خارج التطبيق): سيبها false لحد ما نجهّز Firebase. التنبيه جوه التطبيق (صوت + اهتزاز) شغال دايماً وهو مفتوح.
-  PUSH_ENABLED: false,
+  PUSH_ENABLED: true,
 
   // إعدادات Firebase للإشعارات (من Project settings ← Your apps ← Web app). سيبها فاضية لو مش هتستخدم إشعارات المتصفح
   // vapidKey: Project settings ← Cloud Messaging ← Web Push certificates ← Generate key pair
