@@ -22,18 +22,19 @@
 3. **Deploy ← Manage deployments ← Edit ← Version: New version** (علشان الرابط يفضل نفسه). رابط الويب أب هو `ORDERS_URL` وموجود جاهز في `www/config.js`.
 4. افتح الرابط في المتصفح، لازم يظهر `"service":"orders"` ومعاه `version`.
 
-### 3) Firebase (الإشعارات) — **مؤجّل دلوقتي، تخطّاه**
-التطبيق والـ APK بيشتغلوا من غير Firebase (التنبيه جوه التطبيق بصوت واهتزاز وهو مفتوح). لما نجهّز Firebase: اتبع الخطوات تحت، وغيّر `PUSH_ENABLED: true` في `www/config.js`، وارفع `google-services.json` (الـ workflow هيركّب الإشعارات لوحده لما يلاقيه).
+### 3) Firebase (إشعارات الطلب الجديد حتى لو التطبيق مقفول)
+مشروع Firebase واحد (`murad-pharmacy`) بيخدّم تطبيق العميل وتطبيق المندوب مع بعض، وفيه تطبيقين Android: `com.muradpharmacy.app` (العميل) و`com.muradpharmacy.rider` (المندوب).
 
-1. console.firebase.google.com ← **Add project**.
-2. **Add app ← Android**: package name `com.muradpharmacy.rider` ← نزّل `google-services.json` وارفعه في **جذر المستودع** (ينفع يتحط على GitHub، مفيهوش أسرار).
-3. **Add app ← Web**: انسخ القيم (`apiKey`, `authDomain`, `projectId`, `messagingSenderId`, `appId`) في `FIREBASE` جوه `www/config.js`. من **Project settings ← Cloud Messaging ← Web Push certificates ← Generate key pair** انسخ المفتاح في `vapidKey`. (لو مش عايز إشعارات المتصفح سيب `FIREBASE` فاضي، والـ APK هيشتغل عادي.)
-4. **Project settings ← Service accounts ← Generate new private key**. من الملف اللي نزل (**ممنوع يترفع على GitHub**) حط في Apps Script (**Project Settings ← Script properties**):
+1. **ملف `google-services.json`**: نزّله من Firebase ← **Project settings ← General ← Your apps** (لازم يكون فيه `package_name` التطبيقين). ارفعه في **جذر المستودع** (جنب `package.json` و`README.md` بالظبط)، **باسم `google-services.json` من غير أي تعديل في محتواه**. ينفع يتحط على GitHub، مفيهوش أسرار. الـ workflow بيلاقيه ويركّب الإشعارات لوحده.
+2. **مفتاح السيرفر**: **Project settings ← Service accounts ← Generate new private key**. من الملف اللي نزل (**ممنوع يترفع على GitHub**) حط في Apps Script «اوردارس» (**Project Settings ← Script properties**):
    - `FIREBASE_PROJECT_ID` = `project_id`
    - `FIREBASE_CLIENT_EMAIL` = `client_email`
    - `FIREBASE_PRIVATE_KEY` = `private_key` (كامل بـ BEGIN/END)
-   - `RIDER_WEB_URL` = رابط الموقع من خطوة 1 (بيفتحه لما الطيار يدوس على إشعار المتصفح)
-5. في المحرر شغّل `testFirebase` (لازم يطلع ✅ في Execution log). بعد ما طيار يفعّل الإشعارات شغّل `testPushToAllRiders` لتجربة إشعار.
+3. شغّل `testFirebase` من المحرر (لازم يطلع ✅ في Execution log).
+4. في `www/config.js` غيّر `PUSH_ENABLED: true`.
+5. ابني الـ APK (الخطوة اللي بعدها)، وثبّته، وافتح التطبيق، واسمح بالإشعارات، وخلّي حالتك «يعمل الان».
+6. جرّب: `testPushToAllRiders` من المحرر، أو اعمل طلب من تطبيق العميل.
+> إشعارات المتصفح (Web) اختيارية ومش لازمة للـ APK، فسيب `FIREBASE` في `config.js` فاضي.
 
 ### 4) APK
 **Actions ← Build Android APK ← Run workflow**، وبعد ~5 دقايق نزّل `murad-rider-apk` من Artifacts. التحديثات بتتثبت فوق القديمة لأن المفتاح ثابت (`debug.keystore`). الإشعارات في الـ APK بتشتغل والتطبيق مقفول.
