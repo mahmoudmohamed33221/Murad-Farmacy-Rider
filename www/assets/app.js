@@ -1,4 +1,4 @@
-// تطبيق الطيار - صيدليات د/ مراد صادق
+// تطبيق الطيار - صيدلية عوف
 (function () {
   "use strict";
   var CFG = self.APP_CONFIG || {};
@@ -421,7 +421,7 @@
   }
   function invBlock(o, withShip, cust) {
     var on = !!S.inv[o.bon];
-    return '<div class="inv' + (on ? " open" : "") + '" data-ib="' + o.bon + '"><button type="button" class="inv-h" data-inv="' + o.bon + '"><b class="inv-title">' + (on ? "صيدليات د/ مراد صادق" : "افتح الفاتورة") + '</b><span class="inv-arw">' + ic("chev") + '</span><img src="assets/logo.png" alt=""></button><div class="inv-body">' + invoiceTable(o, withShip, cust) + "</div></div>";
+    return '<div class="inv' + (on ? " open" : "") + '" data-ib="' + o.bon + '"><button type="button" class="inv-h" data-inv="' + o.bon + '"><b class="inv-title">' + (on ? "صيدلية عوف" : "افتح الفاتورة") + '</b><span class="inv-arw">' + ic("chev") + '</span><img src="assets/logo.png" alt=""></button><div class="inv-body">' + invoiceTable(o, withShip, cust) + "</div></div>";
   }
   function tcardHTML(o) {
     return '<div class="tcard sm tc3"><div><small>اليوم</small><b>' + esc(o.day || "—") + (o.dateTxt ? " <span>(" + esc(o.dateTxt) + ")</span>" : "") + '</b></div><div><small>الساعة</small><b>' + esc(o.timeTxt || "—") + '</b></div><div><small>التأخير</small>' + miniClock(o) + "</div></div>";
@@ -704,7 +704,7 @@
     var p = S.pilot || {};
     if (pg === "profile") {
       var row = function (i, h, v, ltr) { return '<div class="dp-row"><span class="ic">' + ic(i) + '</span><div class="txt"><h4>' + h + "</h4><p" + (ltr ? ' dir="ltr" style="text-align:right"' : "") + ">" + esc(v || "—") + "</p></div></div>"; };
-      return '<div class="dp-card"><div class="dp-top"><div class="dp-avatar"></div><div class="dp-name">' + esc(p.name || "—") + '</div><div class="dp-role">كابتن طيار صيدليات د/ مراد صادق</div></div></div>' +
+      return '<div class="dp-card"><div class="dp-top"><div class="dp-avatar"></div><div class="dp-name">' + esc(p.name || "—") + '</div><div class="dp-role">كابتن طيار صيدلية عوف</div></div></div>' +
         '<div class="dp-card">' + row("phone", "رقم الهاتف", p.phone, 1) + row("pin", "العنوان بالكامل", p.address) + row("id", "الرقم القومي", p.idCard, 1) + row("cal", "تاريخ الميلاد", p.birthDate) + row("cake", "السن الحالي", p.age ? p.age + " سنة" : "") + row("bike", "نوع المركبة", p.vehicle) + "</div>" +
         '<button class="end-shift-btn" data-out="1" style="margin-top:16px">' + ic("logout") + " تسجيل الخروج من الحساب</button>";
     }
@@ -719,7 +719,7 @@
         '<div class="card"><h3 class="sec">أسئلة سريعة</h3><div class="kv"><span>مفيش طلبات بتظهر؟</span><span>اتأكد إن حالتك «يعمل الآن» والنت شغال</span></div><div class="kv"><span>اتأخرت في طلب؟</span><span>كلّم العميل من أيقونة الاتصال</span></div><div class="kv"><span>قبلت طلب بالغلط؟</span><span>«تنازل عن الطلب» قبل ما توصل الصيدلية</span></div></div>';
     }
     var th2 = ld("mrf_theme", "auto");
-    return '<div class="card" style="text-align:center"><img src="assets/logo.png" alt="" style="width:92px;height:92px;border-radius:22px;margin:6px auto 10px;display:block"><h3 style="font-size:18px">' + esc(CFG.APP_NAME || "") + '</h3><p style="color:var(--mut);margin:4px 0 12px">تطبيق الطيار لتوصيل طلبات صيدليات د/ مراد صادق</p><div class="kv"><span>الإصدار</span><span dir="ltr">' + esc(CFG.APP_VERSION || "") + (CFG.BUILD && CFG.BUILD !== "__BUILD__" ? " · " + esc(CFG.BUILD) : "") + '</span></div><div class="kv"><span>التنبيهات</span><span>' + esc(notifState()) + "</span></div></div>" + (pushOn() && notifState() !== "مفعّلة" && (native() || fbOK()) ? '<button class="btn pri" data-push="1" style="margin-bottom:10px">' + ic("bell") + " تفعيل الإشعارات</button>" : "") + '<button class="btn sec" data-themebtn="1">' + ic("moon") + " المظهر: " + (th2 === "auto" ? "تلقائي" : th2 === "dark" ? "داكن" : "فاتح") + "</button>";
+    return '<div class="card" style="text-align:center"><img src="assets/logo.png" alt="" style="width:92px;height:92px;border-radius:22px;margin:6px auto 10px;display:block"><h3 style="font-size:18px">' + esc(CFG.APP_NAME || "") + '</h3><p style="color:var(--mut);margin:4px 0 12px">تطبيق الطيار لتوصيل طلبات صيدلية عوف</p><div class="kv"><span>الإصدار</span><span dir="ltr">' + esc(CFG.APP_VERSION || "") + (CFG.BUILD && CFG.BUILD !== "__BUILD__" ? " · " + esc(CFG.BUILD) : "") + '</span></div><div class="kv"><span>التنبيهات</span><span>' + esc(notifState()) + "</span></div></div>" + (pushOn() && notifState() !== "مفعّلة" && (native() || fbOK()) ? '<button class="btn pri" data-push="1" style="margin-bottom:10px">' + ic("bell") + " تفعيل الإشعارات</button>" : "") + '<button class="btn sec" data-themebtn="1">' + ic("moon") + " المظهر: " + (th2 === "auto" ? "تلقائي" : th2 === "dark" ? "داكن" : "فاتح") + "</button>";
   }
   function openMenu() {
     var d = $("drawer"), M = [["profile", "user"], ["earnings", "chart"], ["wallet", "wallet"], ["inbox", "mail"], ["support", "headset"], ["about", "info"]];
@@ -770,7 +770,7 @@
     if (S.view !== "main") bindAuth();
     self.scrollTo(0, y);
     var n = S.view === "main" && S.pilot && S.pilot.working ? S.pool.length : 0;
-    document.title = (n ? "(" + n + ") " : "") + (CFG.APP_NAME || "مراد صادق رايدر");
+    document.title = (n ? "(" + n + ") " : "") + (CFG.APP_NAME || "عوف رايدر");
   }
 
   // ---------- أحداث الشاشة الرئيسية (تفويض) ----------
@@ -798,7 +798,7 @@
     else if (d.chat) toast("الشات مع العميل هيتفعّل قريب 💬");
     else if (d.inv) {
       var box = t.closest(".inv"), on = !box.classList.contains("open"); S.inv[+d.inv] = on; box.classList.toggle("open", on);
-      t.querySelector(".inv-title").textContent = on ? "صيدليات د/ مراد صادق" : "افتح الفاتورة";
+      t.querySelector(".inv-title").textContent = on ? "صيدلية عوف" : "افتح الفاتورة";
     }
   });
   document.addEventListener("visibilitychange", function () { if (!document.hidden && S.view === "main") refresh(); });
