@@ -1,6 +1,6 @@
-# Murad-Farmacy-Rider — «مراد صادق رايدر» (تطبيق الطيار)
+# Ouf-Farmacy-Rider — «عوف رايدر» (تطبيق الطيار)
 
-تطبيق للطيارين (موقع PWA + APK أندرويد) مربوط بتطبيق العميل Murad-Pharmacy **على نفس شيت الصيدلية** (ورق: الطلبات / الطيارين / الطلبات المكتملة / العملاء).
+تطبيق للطيارين (موقع PWA + APK أندرويد) مربوط بتطبيق العميل Ouf-Farmacy **على نفس شيت الصيدلية** (ورق: الطلبات / الطيارين / الطلبات المكتملة / العملاء).
 
 ## إزاي بيشتغل
 - العميل يعمل طلب ← يتكتب في ورقة **الطلبات** ← إشعار Firebase يوصل **كل الطيارين الشغالين** ("يعمل" + حالتهم مقبول + عندهم توكن).
@@ -14,10 +14,10 @@
 ## الإعداد (مرة واحدة)
 
 ### 1) GitHub
-أنشئ مستودع **Public** اسمه `Murad-Farmacy-Rider`، ارفع محتويات المجلد (مع `.github`)، وفعّل **Settings ← Pages ← Source: GitHub Actions**. الموقع هيبقى `https://USERNAME.github.io/Murad-Farmacy-Rider/`.
+أنشئ مستودع **Public** اسمه `Ouf-Farmacy-Rider`، ارفع محتويات المجلد (مع `.github`)، وفعّل **Settings ← Pages ← Source: GitHub Actions**. الموقع هيبقى `https://USERNAME.github.io/Ouf-Farmacy-Rider/`.
 
 ### 2) سكربت الشيت (مهم: ده بيستبدل سكربت الطلبات القديم)
-1. افتح مشروع Apps Script **"اوردارس"** وامسح الكود والصق محتوى `backend/orders.gs` كله (نفس الملف بيخدّم تطبيق العميل والطيار، فاستبدل بيه `backend/orders.gs` في مستودع Murad-Pharmacy كمان).
+1. افتح مشروع Apps Script **"اوردارس"** وامسح الكود والصق محتوى `backend/orders.gs` كله (نفس الملف بيخدّم تطبيق العميل والطيار، فاستبدل بيه `backend/orders.gs` في مستودع Ouf-Farmacy كمان).
 2. شغّل `setupSheets` مرة (آمنة لو الورق موجود، بتظبط تنسيق الأعمدة).
 3. **Deploy ← Manage deployments ← Edit ← Version: New version** (علشان الرابط يفضل نفسه). رابط الويب أب هو `ORDERS_URL` وموجود جاهز في `www/config.js`.
 4. افتح الرابط في المتصفح، لازم يظهر `"service":"orders"` ومعاه `version`.
@@ -37,7 +37,7 @@
 > إشعارات المتصفح (Web) اختيارية ومش لازمة للـ APK، فسيب `FIREBASE` في `config.js` فاضي.
 
 ### 4) APK
-**Actions ← Build Android APK ← Run workflow**، وبعد ~5 دقايق نزّل `murad-rider-apk` من Artifacts. التحديثات بتتثبت فوق القديمة لأن المفتاح ثابت (`debug.keystore`). الإشعارات في الـ APK بتشتغل والتطبيق مقفول.
+**Actions ← Build Android APK ← Run workflow**، وبعد ~5 دقايق نزّل `ouf-rider-apk` من Artifacts. التحديثات بتتثبت فوق القديمة لأن المفتاح ثابت (`debug.keystore`). الإشعارات في الـ APK بتشتغل والتطبيق مقفول.
 
 ### 5) إعدادات `www/config.js`
 - `SUPPORT_PHONE`: رقم الإدارة اللي بيظهر في «المساعدة والدعم» (اتصال/واتساب).
