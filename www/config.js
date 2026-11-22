@@ -1,11 +1,11 @@
-// ===== إعدادات تطبيق الطيار - صيدليات د/ مراد صادق =====
+// ===== إعدادات تطبيق الطيار - صيدلية عوف =====
 // ده الملف الوحيد اللي بتعدل فيه الإعدادات من غير ما تلمس الكود.
 // (self بدل window علشان الملف ده بيتقرا كمان جوه الـ service worker)
 self.APP_CONFIG = {
-  APP_NAME: "مراد صادق رايدر",
+  APP_NAME: "عوف رايدر",
 
   // رقم دعم الإدارة (بيظهر في المساعدة والدعم). مثال: "01012345678"
-  SUPPORT_PHONE: "",
+  SUPPORT_PHONE: "01508800926",
 
   // رابط سكربت الطلبات (مشروع Apps Script "اوردارس") - نفس الرابط اللي في تطبيق العميل بالظبط
   ORDERS_URL: "https://script.google.com/macros/s/AKfycbzyf782naOPvsHGLKSpY9Kj6rvgCIlpVJ1g_tt7N9DCQapNkgHHO_fYaAruL462jUo/exec",
