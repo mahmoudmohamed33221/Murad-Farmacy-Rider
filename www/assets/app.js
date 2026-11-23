@@ -903,7 +903,7 @@
     var PN = plug("PushNotifications"); if (!PN) { if (ask) toast("الإشعارات مش متاحة في النسخة دي", "bad"); return; }
     Promise.resolve(PN.checkPermissions()).then(function (s) { return s.receive === "granted" ? s : (s.receive === "denied" && !ask ? s : PN.requestPermissions()); }).then(function (s) {
       if (s.receive !== "granted") { S.pstep = "الإذن مش مسموح"; if (ask) toast("لازم تسمح بالإشعارات من إعدادات الموبايل", "bad"); return; }
-      return Promise.resolve(PN.createChannel({ id: CFG.CHANNEL_ID || "murad_orders_v1", name: "الطلبات الجديدة", description: "إشعارات الطلبات الجديدة", importance: 5, visibility: 1, sound: "default", vibration: true, lights: true })).catch(function () {}).then(function () {
+      return Promise.resolve(PN.createChannel({ id: CFG.CHANNEL_ID || "ouf_orders_v2", name: "الطلبات الجديدة", description: "إشعارات الطلبات الجديدة", importance: 5, visibility: 1, vibration: true, lights: true })).catch(function () {}).then(function () {
         PN.removeAllListeners();
         PN.addListener("registration", function (t) { S.pushReady = true; S.pstep = "اتسجّل في Firebase"; sendToken(t.value); if (S.view === "main") render(); });
         PN.addListener("registrationError", function (e) { S.pushReady = false; S.pstep = "فشل التسجيل: " + String((e && (e.error || e.message)) || "").slice(0, 60); if (S.view === "main") render(); });
