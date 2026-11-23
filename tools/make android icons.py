@@ -1,0 +1,29 @@
+"""بيولّد أيقونات تطبيق الأندرويد (بيشتغل جوه GitHub Actions). نفس الطريقة بالظبط في تطبيق العميل والرايدر علشان الأيقونتين يطلعوا بنفس الحجم."""
+import os, sys
+from PIL import Image, ImageDraw
+res = sys.argv[1]                      # .../android/app/src/main/res
+src = Image.open(sys.argv[2] if len(sys.argv) > 2 else "android-app/icon-source.png").convert("RGBA")
+dens = {"mdpi": 1, "hdpi": 1.5, "xhdpi": 2, "xxhdpi": 3, "xxxhdpi": 4}
+
+def circle(im):
+    m = Image.new("L", im.size, 0); ImageDraw.Draw(m).ellipse((0, 0) + im.size, fill=255)
+    o = im.copy(); o.putalpha(m); return o
+
+for d, k in dens.items():
+    folder = os.path.join(res, f"mipmap-{d}")
+    if not os.path.isdir(folder): continue
+    legacy = int(48 * k); fg = int(108 * k)
+    sq = src.resize((legacy, legacy), Image.LANCZOS)
+    sq.save(os.path.join(folder, "ic_launcher.png"))
+    circle(sq).save(os.path.join(folder, "ic_launcher_round.png"))
+    canvas = Image.new("RGBA", (fg, fg), (0, 0, 0, 0))
+    inner = int(fg * 0.667)   # الدايرة بتملا القناع الدائري بالظبط
+    t = src.resize((inner, inner), Image.LANCZOS)
+    canvas.paste(t, ((fg - inner) // 2, (fg - inner) // 2), t)
+    canvas.save(os.path.join(folder, "ic_launcher_foreground.png"))
+
+# خلفية الأيقونة المتكيّفة = شفافة: الأيقونة دايرة كاملة من غير مربع
+vals = os.path.join(res, "values"); os.makedirs(vals, exist_ok=True)
+with open(os.path.join(vals, "ic_launcher_background.xml"), "w", encoding="utf-8") as f:
+    f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#00000000</color>\n</resources>\n')
+print("icons done")
