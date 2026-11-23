@@ -8,7 +8,7 @@ self.APP_CONFIG = {
   SUPPORT_PHONE: "01508800926",
 
   // رابط سكربت الطلبات (مشروع Apps Script "اوردارس") - نفس الرابط اللي في تطبيق العميل بالظبط
-  ORDERS_URL: "https://script.google.com/macros/s/AKfycbzB4LTFCu0hLApxsWsVyCL5gW3VeLrThTrSrrJA5BLiV8JZj2Nf5Kw49wq8TwmmZoc/exec",
+  ORDERS_URL: "https://script.google.com/macros/s/AKfycbx2kRwgEEXfS0HOViDO3-b11SDjNdQ78Vgedm3Waam_CuJ4bf9Ku19xc6ib_-eWc-Y/exec",
 
   // مكان الصيدلية: بيتحسب منه "الوصول للصيدلية خلال" اللي بيظهر للعميل، وبيفتح زرار الخريطة
   // خد الإحداثيات: افتح الصيدلية في خرائط جوجل ← اضغط مطولاً على الدبوس ← انسخ الرقمين (مثال 30.0444 , 31.2357)
@@ -21,7 +21,7 @@ self.APP_CONFIG = {
   // vapidKey: Project settings ← Cloud Messaging ← Web Push certificates ← Generate key pair
   FIREBASE: { apiKey: "", authDomain: "", projectId: "", messagingSenderId: "", appId: "", vapidKey: "" },
 
-  CHANNEL_ID: "murad_orders_v1",   // لازم يطابق FCM_CHANNEL في orders.gs
+  CHANNEL_ID: "ouf_orders_v2",   // لازم يطابق FCM_CHANNEL في orders.gs
   POLL_MS: 5000,                   // كل كام ملّي ثانية التطبيق يسأل عن الطلبات والتسعير (والتطبيق ظاهر)
   SPEED_KMH: 25,                   // متوسط سرعة الطيار لحساب الوصول المتوقع
   ROAD_FACTOR: 1.4,                // معامل تقريب المسافة الفعلية على الطريق من الخط المستقيم
