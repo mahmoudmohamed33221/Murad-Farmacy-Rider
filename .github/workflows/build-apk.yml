@@ -55,7 +55,7 @@ jobs:
           perms=["ACCESS_COARSE_LOCATION","ACCESS_FINE_LOCATION","POST_NOTIFICATIONS","VIBRATE"]
           add="".join('\n    <uses-permission android:name="android.permission.%s" />'%x for x in perms if 'android.permission.%s"'%x not in s)
           s=s.replace('<uses-permission android:name="android.permission.INTERNET" />','<uses-permission android:name="android.permission.INTERNET" />'+add,1)
-          meta='\n        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="murad_orders_v1" />'
+          meta='\n        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="ouf_orders_v2" />'
           if 'default_notification_channel_id' not in s: s=s.replace('</application>',meta+'\n    </application>',1)
           s=s.replace('android:allowBackup="true"','android:allowBackup="false"')
           open(p,'w',encoding='utf-8').write(s)
