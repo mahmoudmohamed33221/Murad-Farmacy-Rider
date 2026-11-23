@@ -83,8 +83,10 @@ jobs:
           }
           EOF
 
-      - name: Generate app icons
-        run: npx capacitor-assets generate --android
+      - name: Generate app icons (نفس طريقة تطبيق العميل علشان الحجم يبقى واحد)
+        run: |
+          pip install pillow -q
+          python3 tools/make_android_icons.py android/app/src/main/res resources/icon-only.png
 
       - run: chmod +x android/gradlew
       - name: Build APK
