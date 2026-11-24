@@ -834,11 +834,16 @@
   // لو المندوب قرّب من العميل نبعت للسيرفر يتأكد (بمسافة الطريق مش خط مستقيم) ولو ≤ 25 متر العميل يشوف "المندوب وصل"
   function nearCheck() {
     if (!S.online || !S.pos) return;
+    S.arrived = S.arrived || {};
     S.mine.forEach(function (o) {
       if (o.stage !== "delivering") return; var t = coordsFrom(o.cloc); if (!t) return;
-      if (hav(S.pos, t) * 1000 > 90) return;
-      var k = "n" + o.bon; if (Date.now() - (S.nearT[k] || 0) < 12000) return; S.nearT[k] = Date.now();
-      api("riderNear", { bon: o.bon, lat: S.pos.lat, lng: S.pos.lng });
+      if (hav(S.pos, t) * 1000 > 120) return;
+      var k = "n" + o.bon; if (Date.now() - (S.nearT[k] || 0) < 4000) return; S.nearT[k] = Date.now();
+      api("riderNear", { bon: o.bon, lat: S.pos.lat, lng: S.pos.lng }).then(function (r) {
+        if (!r || r.ok === false) return;
+        var was = !!S.arrived[o.bon], now = !!r.arrived;
+        if (was !== now) { S.arrived[o.bon] = now; etaTick(); }
+      });
     });
   }
   function onPos(lat, lng) { S.pos = { lat: lat, lng: lng, t: Date.now() }; nearCheck(); }
@@ -854,7 +859,7 @@
         S.geoId = navigator.geolocation.watchPosition(function (p) { onPos(p.coords.latitude, p.coords.longitude); }, function () {}, { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 });
       }
     } catch (e) {}
-    if (!S.etaT) S.etaT = setInterval(etaTick, 30000);
+    if (!S.etaT) S.etaT = setInterval(function () { etaTick(); nearCheck(); }, 5000);
     setTimeout(etaTick, 4000);
   }
   function stopGeo() {
@@ -864,19 +869,30 @@
   }
   function etaTick() {
     if (!S.pos || Date.now() - S.pos.t > 180000 || S.view !== "main") return;
+    S.route = S.route || {}; S.routeBusy = S.routeBusy || {}; S.arrived = S.arrived || {};
     var changed = false;
     S.mine.forEach(function (o) {
       var which = null, target = null;
       if (o.stage === "accepted") { which = "shop"; target = storePt(); } else if (o.stage === "delivering") { which = "cust"; target = coordsFrom(o.cloc); }
-      if (!which || !target) { if (S.etaTxt[o.bon]) { delete S.etaTxt[o.bon]; changed = true; } return; }
-      var km = hav(S.pos, target), txt;
-      if (km < 0.15) txt = which === "shop" ? "وصل الصيدلية" : "وصل عندك";
-      else txt = fmtMin(Math.max(1, Math.round((km * (CFG.ROAD_FACTOR || 1.4)) / (CFG.SPEED_KMH || 25) * 60)));
-      var show = (which === "shop" ? "وصولك للصيدلية خلال " : "وصولك للعميل خلال ") + txt;
-      if (km < 0.15) show = txt;
+      if (!which || !target) { if (S.etaTxt[o.bon]) { delete S.etaTxt[o.bon]; changed = true; } delete S.arrived[o.bon]; return; }
+      var key = o.bon + which, hv = hav(S.pos, target), rt = S.route[key];
+      // مسافة ووقت الطريق الفعليين من السيرفر كل ~15 ثانية (أو لو الطيار اتحرك 150 متر)، وبينهم بنحدّث كل 5 ثواني بالتناسب مع قربه الفعلي
+      if (S.online && !S.routeBusy[key] && (!rt || Date.now() - rt.t > 15000 || hav(rt.pos, S.pos) * 1000 > 150)) {
+        S.routeBusy[key] = true; var at = { lat: S.pos.lat, lng: S.pos.lng };
+        api("riderRoute", { bon: o.bon, stage: which, lat: at.lat, lng: at.lng }).then(function (r) {
+          S.routeBusy[key] = false;
+          if (r && r.ok && r.m > 0) { S.route[key] = { m: r.m, s: r.s, hv: Math.max(hav(at, target), 0.005), pos: at, t: Date.now() }; etaTick(); }
+        }, function () { S.routeBusy[key] = false; });
+      }
+      var secs;
+      if (rt && rt.m) { var ratio = Math.min(1.6, hv / rt.hv); secs = Math.max(0, (rt.s || (rt.m / 1000 / (CFG.SPEED_KMH || 25) * 3600)) * ratio); }
+      else secs = (hv * (CFG.ROAD_FACTOR || 1.4)) / (CFG.SPEED_KMH || 25) * 3600;
+      var arr = which === "cust" ? !!S.arrived[o.bon] : hv < 0.06, txt, show;
+      if (arr) { txt = which === "shop" ? "وصل الصيدلية" : "وصل عندك"; show = which === "shop" ? "تم الوصول إلى الصيدلية ✅" : "تم الوصول إلى الموقع المحدد ✅"; }
+      else { txt = fmtMin(Math.max(1, Math.round(secs / 60))); show = (which === "shop" ? "وصولك للصيدلية خلال " : "وصولك للعميل خلال ") + txt; }
       if (S.etaTxt[o.bon] !== show) { S.etaTxt[o.bon] = show; changed = true; }
-      var key = o.bon + which;
-      if (S.online && S.etaSent[key] !== txt) { S.etaSent[key] = txt; api("riderEta", { bon: o.bon, stage: which, etaText: txt }); }
+      var sk = o.bon + which;
+      if (S.online && S.etaSent[sk] !== txt) { S.etaSent[sk] = txt; api("riderEta", { bon: o.bon, stage: which, etaText: txt }); }
     });
     if (changed) render();
   }
