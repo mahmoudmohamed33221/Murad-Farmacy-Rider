@@ -8,7 +8,7 @@ self.APP_CONFIG = {
   SUPPORT_PHONE: "01508800926",
 
   // رابط سكربت الطلبات (مشروع Apps Script "اوردارس") - نفس الرابط اللي في تطبيق العميل بالظبط
-  ORDERS_URL: "https://script.google.com/macros/s/AKfycbxB7i7PthOdLT2IhF-ugJhotH4xKburYhBjLKWk0cDZppFRtqr_RZUvGS4J4Jobzg/exec",
+  ORDERS_URL: "https://script.google.com/macros/s/AKfycbyQfEm9RMO9pPW3RWM45Mv7jnUow-s7fzAptkRo_0kE9rKKgPdfY0RzEMYAcVG9es0/exec",
 
   // مكان الصيدلية: بيتحسب منه "الوصول للصيدلية خلال" اللي بيظهر للعميل، وبيفتح زرار الخريطة
   // خد الإحداثيات: افتح الصيدلية في خرائط جوجل ← اضغط مطولاً على الدبوس ← انسخ الرقمين (مثال 30.0444 , 31.2357)
