@@ -57,6 +57,8 @@ jobs:
           s=s.replace('<uses-permission android:name="android.permission.INTERNET" />','<uses-permission android:name="android.permission.INTERNET" />'+add,1)
           meta='\n        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="ouf_orders_v2" />'
           if 'default_notification_channel_id' not in s: s=s.replace('</application>',meta+'\n    </application>',1)
+          meta2='\n        <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_stat_ouf" />\n        <meta-data android:name="com.google.firebase.messaging.default_notification_color" android:resource="@color/ouf_notif" />'
+          if 'default_notification_icon' not in s: s=s.replace('</application>',meta2+'\n    </application>',1)
           s=s.replace('android:allowBackup="true"','android:allowBackup="false"')
           open(p,'w',encoding='utf-8').write(s)
           PY
