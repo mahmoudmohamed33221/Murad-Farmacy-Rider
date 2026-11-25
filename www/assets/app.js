@@ -134,18 +134,20 @@
     if (!m) return null;
     var la = +m[1], lo = +m[2]; return Math.abs(la) <= 90 && Math.abs(lo) <= 180 ? { lat: la, lng: lo } : null;
   }
-  function storePt() { var s = CFG.STORE || {}; return typeof s.lat === "number" && typeof s.lng === "number" ? { lat: s.lat, lng: s.lng } : null; }
+  function okPt(p) { return p && typeof p.lat === "number" && typeof p.lng === "number" ? { lat: p.lat, lng: p.lng } : null; }
+  // الإحداثيات بتيجي من السيرفر متحسبة لحظيًا من لينك اللوكيشن (العميل: cc / الصيدلية: sc) - مفيش إحداثيات ثابتة في التطبيق
+  function custPt(o) { return o ? (okPt(o.cc) || coordsFrom(o.cloc)) : null; }
+  function storePt(o) { return o ? (okPt(o.sc) || coordsFrom(o.sloc)) : null; }
   function custMap(o) {
-    var c = coordsFrom(o.cloc);
+    var c = custPt(o);
     if (c) return "https://www.google.com/maps/dir/?api=1&destination=" + c.lat + "," + c.lng + "&travelmode=driving";
     if (/^https?:\/\//i.test(o.cloc || "")) return o.cloc;
     return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent([o.area, o.street, o.landmark].filter(Boolean).join(" "));
   }
   function storeMap(o) {
-    var s = CFG.STORE || {}, p = storePt();
-    if (s.mapUrl) return s.mapUrl;
-    if (p) return "https://www.google.com/maps/dir/?api=1&destination=" + p.lat + "," + p.lng + "&travelmode=driving";
+    var p = storePt(o);
     if (o && /^https?:\/\//i.test(o.sloc || "")) return o.sloc;
+    if (p) return "https://www.google.com/maps/dir/?api=1&destination=" + p.lat + "," + p.lng + "&travelmode=driving";
     return /^https?:\/\//i.test(S.mineStore || "") ? S.mineStore : "";
   }
   function hav(a, b) {
@@ -374,7 +376,7 @@
       if (st === "complete") {
         var tot = invTotal(o);
         S.mine = S.mine.filter(function (x) { return x.bon !== bon; });
-        S.localDone[bon] = { bon: bon, name: o.name, area: o.area, total: Number(o.total) || 0, fee: Number(o.fee) || 0, doneAt: nowKey(), t: Date.now(), pending: true, items: o.items, phone: o.phone, street: o.street, landmark: o.landmark, cloc: o.cloc, day: o.day, dateTxt: o.dateTxt, timeTxt: o.timeTxt };
+        S.localDone[bon] = { bon: bon, name: o.name, area: o.area, total: Number(o.total) || 0, fee: Number(o.fee) || 0, doneAt: nowKey(), t: Date.now(), pending: true, items: o.items, phone: o.phone, street: o.street, landmark: o.landmark, cloc: o.cloc, cc: o.cc, sloc: o.sloc, sc: o.sc, day: o.day, dateTxt: o.dateTxt, timeTxt: o.timeTxt };
         addEarn({ bon: bon, name: o.name, area: o.area, orderCost: Number(o.total) || 0, fee: Number(o.fee) || 0, acceptedAt: S.accAt[bon] || 0, deliveredAt: Date.now(), status: "completed", items: o.items }); if (S.open === bon) S.open = null;
         S.history = [S.localDone[bon]].concat(S.history.filter(function (h) { return h.bon !== bon; }));
         S.etaTxt && delete S.etaTxt[bon];
@@ -835,7 +837,7 @@
     try { window.open(urls[urls.length - 1], "_blank"); } catch (e) {}
   }
   function openMap(bon) {
-    var c = S.mapRef[bon]; if (!c) return; var p = coordsFrom(c.cloc);
+    var c = S.mapRef[bon]; if (!c) return; var p = custPt(c);
     openUrls(p ? ["google.navigation:q=" + p.lat + "," + p.lng + "&mode=d", "geo:" + p.lat + "," + p.lng + "?q=" + p.lat + "," + p.lng, "https://www.google.com/maps/dir/?api=1&destination=" + p.lat + "," + p.lng + "&travelmode=driving"] : [custMap(c)]);
   }
   // لو المندوب قرّب من العميل نبعت للسيرفر يتأكد (بمسافة الطريق مش خط مستقيم) ولو ≤ 25 متر العميل يشوف "المندوب وصل"
@@ -843,7 +845,7 @@
     if (!S.online || !S.pos) return;
     S.arrived = S.arrived || {};
     S.mine.forEach(function (o) {
-      if (o.stage !== "delivering") return; var t = coordsFrom(o.cloc); if (!t) return;
+      if (o.stage !== "delivering") return; var t = custPt(o); if (!t) return;
       if (hav(S.pos, t) * 1000 > 120) return;
       var k = "n" + o.bon; if (Date.now() - (S.nearT[k] || 0) < 4000) return; S.nearT[k] = Date.now();
       api("riderNear", { bon: o.bon, lat: S.pos.lat, lng: S.pos.lng }).then(function (r) {
@@ -880,9 +882,9 @@
     var changed = false;
     S.mine.forEach(function (o) {
       var which = null, target = null;
-      if (o.stage === "accepted") { which = "shop"; target = storePt(); } else if (o.stage === "delivering") { which = "cust"; target = coordsFrom(o.cloc); }
+      if (o.stage === "accepted") { which = "shop"; target = storePt(o); } else if (o.stage === "delivering") { which = "cust"; target = custPt(o); }
       if (!which || !target) { if (S.etaTxt[o.bon]) { delete S.etaTxt[o.bon]; changed = true; } delete S.arrived[o.bon]; return; }
-      var key = o.bon + which, hv = hav(S.pos, target), rt = S.route[key];
+      var key = o.bon + which + "_" + target.lat.toFixed(5) + "_" + target.lng.toFixed(5), hv = hav(S.pos, target), rt = S.route[key];
       // مسافة ووقت الطريق الفعليين من السيرفر كل ~15 ثانية (أو لو الطيار اتحرك 150 متر)، وبينهم بنحدّث كل 5 ثواني بالتناسب مع قربه الفعلي
       if (S.online && !S.routeBusy[key] && (!rt || Date.now() - rt.t > 15000 || hav(rt.pos, S.pos) * 1000 > 150)) {
         S.routeBusy[key] = true; var at = { lat: S.pos.lat, lng: S.pos.lng };
