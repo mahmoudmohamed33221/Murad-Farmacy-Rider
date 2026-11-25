@@ -8,11 +8,9 @@ self.APP_CONFIG = {
   SUPPORT_PHONE: "01508800926",
 
   // رابط سكربت الطلبات (مشروع Apps Script "اوردارس") - نفس الرابط اللي في تطبيق العميل بالظبط
-  ORDERS_URL: "https://script.google.com/macros/s/AKfycby8xMqxg_ERbO_vzt7tynwBu36s5fm724F1vmWTxtcDvB1vuJJYJbqp8zSYsmRrtt0/exec",
+  ORDERS_URL: "https://script.google.com/macros/s/AKfycbyrBscAl6c3BbYCfgxyx8a3A-WN4_Llb7knGkOX6RVld_ngBUpvSQ7zQbh565Byc-c/exec",
 
-  // مكان الصيدلية: بيتحسب منه "الوصول للصيدلية خلال" اللي بيظهر للعميل، وبيفتح زرار الخريطة
-  // خد الإحداثيات: افتح الصيدلية في خرائط جوجل ← اضغط مطولاً على الدبوس ← انسخ الرقمين (مثال 30.0444 , 31.2357)
-  STORE: { lat: null, lng: null, mapUrl: "" },
+  // مكان الصيدلية: بيتاخد لحظيًا من لينك الصيدلية في السيرفر (STORE_LOCATION في orders.gs / عمود "لوكيشن المحل") - مفيش إحداثيات هنا.
 
   // إشعارات Firebase (خارج التطبيق): سيبها false لحد ما نجهّز Firebase. التنبيه جوه التطبيق (صوت + اهتزاز) شغال دايماً وهو مفتوح.
   PUSH_ENABLED: true,
