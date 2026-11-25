@@ -3,7 +3,18 @@
   "appName": "عوف رايدر",
   "webDir": "www",
   "plugins": {
-    "CapacitorHttp": { "enabled": true },
-    "SplashScreen": { "launchShowDuration": 300, "launchAutoHide": true, "backgroundColor": "#0F1115", "showSpinner": false }
+    "CapacitorHttp": {
+      "enabled": true
+    },
+    "SplashScreen": {
+      "launchShowDuration": 300,
+      "launchAutoHide": true,
+      "backgroundColor": "#0F1115",
+      "showSpinner": false
+    },
+    "PushNotifications": {
+      "smallIcon": "ic_stat_ouf",
+      "iconColor": "#E30613"
+    }
   }
 }
