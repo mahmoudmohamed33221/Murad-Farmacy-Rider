@@ -400,6 +400,13 @@
 
   // ---------- العرض ----------
   // المسافة بالطريق من الصيدلية لموقع العميل (هي نفسها اللي اتحسب عليها التوصيل) — للاطلاع فقط، وبتتحدّث مع الشيت
+  // الحرف قبل المسافة: G = محسوبة من خرائط جوجل، O = من الاحتياطي OSRM، ~ = تقدير مؤقت لحد ما الحساب الحقيقي يخلص
+  function kmShow(c) {
+    var n = Number(c && c.km);
+    if (!(n > 0) || (c && c.priced === false && !(c.src))) return "جاري حساب المسافة…";
+    var s = String((c && c.src) || ""), l = s === "G" || s === "O" ? s : (s === "E" ? "~" : "");
+    return (l ? '<i class="kmsrc">' + l + "</i> " : "") + kmTxt(n);
+  }
   function kmTxt(k) { var n = Number(k); return (isFinite(n) && n > 0 ? n : 0).toFixed(3) + " كم"; }
   function custSection(c) {
     S.mapRef[c.bon || 0] = c;
@@ -407,7 +414,7 @@
     var btns = c.phone ? '<div class="cbtns sm"><a class="ib call" href="tel:' + esc(c.phone) + '" aria-label="اتصال">' + ic("phone") + '</a><a class="ib wa" href="' + esc(wa) + '" target="_blank" rel="noopener" aria-label="واتساب">' + ic("wa") + '</a><button class="ib chat" data-chat="1" aria-label="رسالة">' + ic("chat") + "</button></div>" : "";
     var addr = [c.area, c.street].filter(Boolean).join(" — ");
     return '<div class="ic-sec"><div class="ic-row"><div class="ic-txt"><span class="ic-lbl">العميل</span><b class="ic-name">' + esc(nm || "—") + "</b></div>" + btns + "</div>" +
-      (addr || c.landmark ? '<div class="ic-row ic-adr"><div class="ic-txt"><span class="ic-lbl">العنوان :</span><div class="ic-addr">' + esc(addr || "—") + "</div>" + (c.landmark ? "<small>علامة مميزة : " + esc(c.landmark) + "</small>" : "") + '</div><div class="mapcol"><button class="ib map sm" data-map="' + (c.bon || 0) + '" aria-label="الموقع على الخريطة">' + ic("pin") + '</button><span class="kmtag" dir="ltr" title="المسافة من الصيدلية للعميل (للاطلاع فقط)">' + kmTxt(c.km) + "</span></div></div>" : "") + "</div>";
+      (addr || c.landmark ? '<div class="ic-row ic-adr"><div class="ic-txt"><span class="ic-lbl">العنوان :</span><div class="ic-addr">' + esc(addr || "—") + "</div>" + (c.landmark ? "<small>علامة مميزة : " + esc(c.landmark) + "</small>" : "") + '</div><div class="mapcol"><button class="ib map sm" data-map="' + (c.bon || 0) + '" aria-label="الموقع على الخريطة">' + ic("pin") + '</button><span class="kmtag" dir="ltr" title="المسافة من الصيدلية للعميل (للاطلاع فقط)">' + kmShow(c) + "</span></div></div>" : "") + "</div>";
   }
   function invoiceTable(o, withShip, cust) {
     var L = parseLines(o.items), tot = invTotal(o);
