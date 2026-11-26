@@ -548,6 +548,7 @@ var MSG_ = {
 // ===== لوكيشن العميل ================================================
 // =====================================================================
 var CUST_TAB_ = "العملاء", C_PHONE_ = 3, C_LOC_ = 5;   // ورقة العملاء: عمود 3 رقم الهاتف، عمود 5 لوكيشن العميل
+var UA_DESK_ = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";   // جوجل بترجّع إحداثيات الدبوس في لينك الكمبيوتر، ولينك الموبايل ساعات بيرجع اسم ورقم المكان بس
 var UA_ = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36";
 var PRICE_BUDGET_ = 2;   // أقصى عدد طلبات بنعيد تسعيرها في الطلب الواحد (علشان الرد يفضل سريع)
 function inEgypt_(la, lo) { return isFinite(la) && isFinite(lo) && la >= 21 && la <= 33 && lo >= 24 && lo <= 37.5; }
@@ -695,7 +696,7 @@ function cidCoords_(text) {
   try {
     for (var k = 0; k < 4 && cu && !res; k++) {
       var pc = parseCoords_(cu); if (pc && !viewportOnly_(cu)) { res = pc; break; }
-      var r = UrlFetchApp.fetch(cu, { followRedirects: false, muteHttpExceptions: true, headers: { "User-Agent": UA_, "Accept-Language": "ar,en;q=0.8", "Cookie": "CONSENT=YES+cb.20240101-00-p0.en+FX+000; SOCS=CAI" } });
+      var r = UrlFetchApp.fetch(cu, { followRedirects: false, muteHttpExceptions: true, headers: { "User-Agent": UA_DESK_, "Accept-Language": "ar,en;q=0.8", "Cookie": "CONSENT=YES+cb.20240101-00-p0.en+FX+000; SOCS=CAI" } });
       var h = r.getHeaders() || {}, l = h["Location"] || h["location"], code = r.getResponseCode();
       if (code >= 300 && code < 400 && l) { cu = /^https?:/i.test(l) ? l : "https://www.google.com" + l; continue; }
       var b = String(r.getContentText() || "").slice(0, 400000); res = bodyCoords_(b) || bodyCoordsMore_(b) || pc; break;
@@ -704,22 +705,29 @@ function cidCoords_(text) {
   if (res) cache.put(key, res.lat + "," + res.lng, 21600);
   return res;
 }
-function resolveMapsLink_(url) {
-  var cache = CacheService.getScriptCache(), key = "loc_" + hash_(url), c = cache.get(key);
-  if (c) { var p = c.split(","); return { lat: +p[0], lng: +p[1] }; }
-  var cur = url, res = null;
+function walkMapsLink_(url, ua) {
+  var cur = url, res = null, place = "";      // place = آخر لينك فيه اسم المكان/رقمه (بيتحفظ عشان صفحة جوجل ممكن تبعتنا لروابط تانية ملهاش لازمة)
   for (var i = 0; i < 6 && cur; i++) {
+    if (/\/maps\/place\//.test(cur) || /!1s0x[0-9a-fA-F]+:0x/.test(cur)) place = cur;
     var pc = parseCoords_(cur); if (pc) { res = viewportOnly_(cur) ? (cidCoords_(cur) || pc) : pc; break; }
-    var r = UrlFetchApp.fetch(cur, { followRedirects: false, muteHttpExceptions: true, headers: { "User-Agent": UA_, "Accept-Language": "ar,en;q=0.8", "Cookie": "CONSENT=YES+cb.20240101-00-p0.en+FX+000; SOCS=CAI" } });
+    var r = UrlFetchApp.fetch(cur, { followRedirects: false, muteHttpExceptions: true, headers: { "User-Agent": ua, "Accept-Language": "ar,en;q=0.8", "Cookie": "CONSENT=YES+cb.20240101-00-p0.en+FX+000; SOCS=CAI" } });
     var code = r.getResponseCode(), h = r.getHeaders() || {}, loc = h["Location"] || h["location"];
     if (code >= 300 && code < 400 && loc) { cur = /^https?:/i.test(loc) ? loc : (/^\//.test(loc) ? "https://www.google.com" + loc : loc); continue; }
     var body = String(r.getContentText() || "").slice(0, 400000), bc = bodyCoords_(body) || bodyCoordsMore_(body);
     if (bc) { res = bc; break; }
     var mm = body.match(/https?:\/\/(?:www\.)?google\.[a-z.]+\/maps[^"'<>\s\\]*/i), nx = mm ? mm[0].replace(/&amp;/g, "&") : "";
-    if (nx && nx !== cur) { cur = nx; continue; }
+    if (nx && nx !== cur && (parseCoords_(nx) || /\/maps\/place\//.test(nx))) { cur = nx; continue; }
     break;
   }
-  if (!res) res = cidCoords_(cur) || cidCoords_(url) || placeNameCoords_(cur) || placeNameCoords_(url);      // لينكات "البيوت" بترجع بس رقم المكان (CID)
+  return { res: res, cur: cur, place: place };
+}
+function resolveMapsLink_(url) {
+  var cache = CacheService.getScriptCache(), key = "loc_" + hash_(url), c = cache.get(key);
+  if (c) { var p = c.split(","); return { lat: +p[0], lng: +p[1] }; }
+  var w = walkMapsLink_(url, UA_), res = w.res, cur = w.cur, place = w.place;
+  if (!res) { try { var w2 = walkMapsLink_(url, UA_DESK_); res = w2.res; if (w2.cur) cur = w2.cur; if (w2.place) place = w2.place; } catch (e) {} }      // نفس اللينك بشكل الكمبيوتر (فيه إحداثيات الدبوس)
+  if (!res && place) res = cidCoords_(place) || placeNameCoords_(place);      // لينك اسم+رقم المكان بس: رقم المكان (CID) وبعده العنوان اللي في اللينك
+  if (!res) res = cidCoords_(cur) || cidCoords_(url) || placeNameCoords_(cur) || placeNameCoords_(url);
   if (res) cache.put(key, res.lat + "," + res.lng, 21600);
   return res;
 }
@@ -811,12 +819,29 @@ function feeForMeters_(meters, rate) {
 var ROUTE_LONGEST_ = false;
 // شغّلها مرة واحدة من المحرر: بتخلّي كل الطلبات المفتوحة تتحسب مسافتها وتوصيلها تاني بالطريق الصح
 function repriceOpenOrders() {
-  var sh = ordersSheet_(ssOpen_()), n = sh.getLastRow(); if (n < 2) return;
-  var done = sh.getRange(2, O.DONE, n - 1, 1).getValues(), cleared = 0;
-  for (var i = 0; i < done.length; i++) if (!isTrue_(done[i][0])) { sh.getRange(i + 2, O_SIG).clearContent(); cleared++; }
-  var cache = CacheService.getScriptCache();
-  for (var r = 2; r <= n; r++) { try { priceOrder_(sh, r); } catch (e) {} }
-  Logger.log("✅ اتحسبت تاني " + cleared + " طلب مفتوح");
+  var t0 = new Date(), sh = ordersSheet_(ssOpen_()), n = sh.getLastRow(); if (n < 2) { Logger.log("مفيش طلبات"); return; }
+  var v = sh.getRange(2, 1, n - 1, O_ARR).getValues(), todo = [];
+  for (var i = 0; i < v.length; i++) {      // الطلبات المفتوحة اللي ليها لوكيشن بس (مش كل التاريخ)
+    var rv = v[i]; if (!(Number(rv[O.BON - 1]) > 0) || isTrue_(rv[O.DONE - 1]) || !String(rv[O.CLOC - 1] || "").trim()) continue;
+    todo.push(i + 2);
+  }
+  Logger.log("طلبات مفتوحة هتتحسب: " + todo.length);
+  var cache = CacheService.getScriptCache(), ok = 0, bad = 0;
+  for (var k = 0; k < todo.length; k++) {
+    if (new Date() - t0 > 240000) { Logger.log("⏱ وقفت قبل حد الوقت: اتحسب " + ok + " وفاضل " + (todo.length - k) + " — شغّلها تاني"); return; }
+    var r = todo[k], bon = Number(v[r - 2][O.BON - 1]) || 0;
+    try {
+      if (String(v[r - 2][O.SLOC - 1] || "").trim() !== STORE_LOCATION) sh.getRange(r, O.SLOC).setValue(STORE_LOCATION);      // الطلبات المفتوحة تمشي على لوكيشن المحل الحالي اللي في الكود
+      sh.getRange(r, O_SIG).clearContent(); cache.remove("pf_" + bon);
+      var done = priceOrder_(sh, r);
+      if (done) { Logger.log("طلب " + bon + " ← ✅ " + sh.getRange(r, O_KM).getValue() + " كم | توصيل " + sh.getRange(r, O_FEE).getValue()); ok++; }
+      else {
+        bad++; var cl = String(v[r - 2][O.CLOC - 1] || "").trim(), a = storeCoords_(STORE_LOCATION), b = coordsOfLink_(cl);
+        Logger.log("طلب " + bon + " ← ❌ المحل: " + (a ? "✅" : "❌") + " | العميل: " + (b ? "✅ " + b.lat + "," + b.lng : "❌ " + cl.slice(0, 80)) + (!b && /^https?:/i.test(cl) ? "\n" + debugLink_(cl) : ""));
+      }
+    } catch (e) { bad++; Logger.log("طلب " + bon + " ← خطأ: " + e); }
+  }
+  Logger.log("✅ خلصت: " + ok + " اتحسب، " + bad + " فشل (" + Math.round((new Date() - t0) / 1000) + " ثانية)");
 }
 // بيحسب التوصيل = مسافة الطريق (كم) × تسعيرة الكيلو، ويكتبهم في الشيت. بيتنفذ لوحده لما اللوكيشن أو الصيدلية أو التسعيرة تتغير
 function priceOrder_(sh, r) {
@@ -1826,6 +1851,23 @@ function testLocations() {
 }
 
 // شغّلها من المحرر: بتجرب لوكيشن الصيدلية بكل الصيغ (عنوان مكتوب / لينكات مختصرة / لينك كامل) وبتقولك كل واحدة وصلت فين وبعدها قد إيه عن اللينك الكامل
+function debugLink_(url) {      // بيورّي كل خطوة بيعملها السيرفر مع اللينك (جوال وكمبيوتر) عشان نعرف ليه فشل
+  var out = [];
+  [["جوال", UA_], ["كمبيوتر", UA_DESK_]].forEach(function (u) {
+    var cur = url;
+    for (var i = 0; i < 5 && cur; i++) {
+      try {
+        var r = UrlFetchApp.fetch(cur, { followRedirects: false, muteHttpExceptions: true, headers: { "User-Agent": u[1], "Accept-Language": "ar,en;q=0.8", "Cookie": "CONSENT=YES+cb.20240101-00-p0.en+FX+000; SOCS=CAI" } });
+        var h = r.getHeaders() || {}, loc = h["Location"] || h["location"], code = r.getResponseCode();
+        if (loc) { out.push("   " + u[0] + " خطوة " + (i + 1) + ": " + code + " ← " + String(loc).slice(0, 230)); cur = /^https?:/i.test(loc) ? loc : "https://www.google.com" + loc; continue; }
+        var b = String(r.getContentText() || "");
+        out.push("   " + u[0] + " خطوة " + (i + 1) + ": " + code + " صفحة " + b.length + " حرف | !3d:" + (/!3d-?\d/.test(b) ? "فيه" : "لا") + " @:" + (/@-?\d+\.\d+,-?\d+/.test(b) ? "فيه" : "لا") + " center=:" + (/center=-?\d/.test(b) ? "فيه" : "لا") + " | " + b.replace(/\s+/g, " ").slice(0, 120));
+      } catch (e) { out.push("   " + u[0] + " خطأ: " + e); }
+      break;
+    }
+  });
+  return out.join("\n");
+}
 function testFormats() {
   var forms = {
     "1 عنوان مكتوب": "صيدلية عوف، 104 ابن سندر، الزيتون الشرقية، قسم الزيتون، محافظة القاهرة 4520156",
@@ -1841,6 +1883,6 @@ function testFormats() {
     var t0 = new Date(), c = null, err = "";
     try { c = coordsOfLink_(forms[k]); } catch (e) { err = " خطأ: " + e; }
     var d = c && base ? Math.round(havM_(base, c)) + " متر عن المرجع" : "";
-    Logger.log(k + " ← " + (c ? "✅ " + c.lat + "," + c.lng + " | " + d : "❌ فشل" + err) + " (" + (new Date() - t0) + "ms)");
+    Logger.log(k + " ← " + (c ? "✅ " + c.lat + "," + c.lng + " | " + d : "❌ فشل" + err) + " (" + (new Date() - t0) + "ms)" + (!c && /^https?:/i.test(forms[k]) ? "\n" + debugLink_(forms[k]) : ""));
   });
 }
