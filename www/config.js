@@ -8,7 +8,7 @@ self.APP_CONFIG = {
   SUPPORT_PHONE: "01508800926",
 
   // رابط سكربت الطلبات (مشروع Apps Script "اوردارس") - نفس الرابط اللي في تطبيق العميل بالظبط
-  ORDERS_URL: "https://script.google.com/macros/s/AKfycbyrBscAl6c3BbYCfgxyx8a3A-WN4_Llb7knGkOX6RVld_ngBUpvSQ7zQbh565Byc-c/exec",
+  ORDERS_URL: "https://script.google.com/macros/s/AKfycbyptSOmrftkGznCPd2jP_9-e0atAlZduDmXYh35VIfEg73cm1ZHbJ5O6PUv9_dcupE/exec",
 
   // مكان الصيدلية: بيتاخد لحظيًا من لينك الصيدلية في السيرفر (STORE_LOCATION في orders.gs / عمود "لوكيشن المحل") - مفيش إحداثيات هنا.
 
