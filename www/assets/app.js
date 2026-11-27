@@ -57,7 +57,7 @@
   var ic = function (n) { return '<svg viewBox="0 0 24 24"' + (n === "wa" ? ' class="fi"' : "") + ' aria-hidden="true">' + (P[n] || "") + "</svg>"; };
 
   // ---------- الحالة ----------
-  var S = { view: "splash", tab: "new", mapRef: {}, nearT: {}, page: null, inv: {}, open: null, fee: 0, eh: null, earn: null, shiftStart: 0, accAt: {}, queue: ld("mrf_queue", []), acked: [], localDone: ld("mrf_ldone", {}), weak: 0, flushing: false, flushT: null, failN: 0, creds: ld("mrf_creds", null), pilot: ld("mrf_pilot", null), pool: [], mine: [], history: [], seen: null, loaded: false,
+  var S = { view: "splash", tab: "new", mapRef: {}, nearT: {}, page: null, inv: {}, open: null, fee: 0, eh: null, earn: null, shiftStart: 0, accAt: {}, delAt: {}, queue: ld("mrf_queue", []), acked: [], localDone: ld("mrf_ldone", {}), weak: 0, flushing: false, flushT: null, failN: 0, creds: ld("mrf_creds", null), pilot: ld("mrf_pilot", null), pool: [], mine: [], history: [], seen: null, loaded: false,
     online: true, busy: false, keys: {}, flash: {}, pos: null, geoOn: false, etaSent: {}, etaTxt: {}, token: ld("mrf_token", ""), tokenSent: "", pushReady: false, msg: "", pendT: null, pollT: null, lastSync: 0 };
   var native = function () { return !!(self.Capacitor && self.Capacitor.isNativePlatform && self.Capacitor.isNativePlatform()); };
   var plug = function (n) { return self.Capacitor && self.Capacitor.Plugins && self.Capacitor.Plugins[n]; };
@@ -136,8 +136,8 @@
   }
   function okPt(p) { return p && typeof p.lat === "number" && typeof p.lng === "number" ? { lat: p.lat, lng: p.lng } : null; }
   // الإحداثيات بتيجي من السيرفر متحسبة لحظيًا من لينك اللوكيشن (العميل: cc / الصيدلية: sc) - مفيش إحداثيات ثابتة في التطبيق
-  function custPt(o) { return o ? (okPt(o.cc) || coordsFrom(o.cloc)) : null; }
-  function storePt(o) { return o ? (okPt(o.sc) || coordsFrom(o.sloc)) : null; }
+  function custPt(o) { return o ? (okPt(o.cc) || coordsFrom(o.cloc) || okPt(S.tgt && S.tgt[o.bon + "cust"])) : null; }
+  function storePt(o) { return o ? (okPt(o.sc) || coordsFrom(o.sloc) || okPt(S.tgt && S.tgt[o.bon + "shop"])) : null; }
   function custMap(o) {
     var c = custPt(o);
     if (c) return "https://www.google.com/maps/dir/?api=1&destination=" + c.lat + "," + c.lng + "&travelmode=driving";
@@ -377,10 +377,10 @@
         var tot = invTotal(o);
         S.mine = S.mine.filter(function (x) { return x.bon !== bon; });
         S.localDone[bon] = { bon: bon, name: o.name, area: o.area, total: Number(o.total) || 0, fee: Number(o.fee) || 0, doneAt: nowKey(), t: Date.now(), pending: true, items: o.items, phone: o.phone, street: o.street, landmark: o.landmark, cloc: o.cloc, cc: o.cc, sloc: o.sloc, sc: o.sc, day: o.day, dateTxt: o.dateTxt, timeTxt: o.timeTxt };
-        addEarn({ bon: bon, name: o.name, area: o.area, orderCost: Number(o.total) || 0, fee: Number(o.fee) || 0, acceptedAt: S.accAt[bon] || 0, deliveredAt: Date.now(), status: "completed", items: o.items }); if (S.open === bon) S.open = null;
+        addEarn({ bon: bon, name: o.name, area: o.area, orderCost: Number(o.total) || 0, fee: Number(o.fee) || 0, acceptedAt: S.accAt[bon] || 0, deliveringAt: S.delAt[bon] || 0, deliveredAt: Date.now(), status: "completed", items: o.items }); if (S.open === bon) S.open = null;
         S.history = [S.localDone[bon]].concat(S.history.filter(function (h) { return h.bon !== bon; }));
         S.etaTxt && delete S.etaTxt[bon];
-      } else o.stage = st === "prepare" ? "preparing" : "delivering";
+      } else { o.stage = st === "prepare" ? "preparing" : "delivering"; if (st === "deliver") { S.delAt[bon] = Date.now(); saveEarn(); } }
       if (st === "prepare") S.tab = "del";
       S.queue.push({ id: Date.now() + "" + Math.floor(Math.random() * 999), bon: bon, stage: st, at: Date.now() });
       saveQueue(); saveCache(); S.etaSent = {};
@@ -419,14 +419,15 @@
       (addr || c.landmark ? '<div class="ic-row ic-adr"><div class="ic-txt"><span class="ic-lbl">العنوان :</span><div class="ic-addr">' + esc(addr || "—") + "</div>" + (c.landmark ? "<small>علامة مميزة : " + esc(c.landmark) + "</small>" : "") + '</div><div class="mapcol"><button class="ib map sm" data-map="' + (c.bon || 0) + '" aria-label="الموقع على الخريطة">' + ic("pin") + '</button><span class="kmtag" dir="ltr" title="المسافة من الصيدلية للعميل (للاطلاع فقط)">' + kmShow(c) + "</span></div></div>" : "") + "</div>";
   }
   function invoiceTable(o, withShip, cust) {
-    var L = parseLines(o.items), tot = invTotal(o);
+    var L = parseLines(o.items), tot = invTotal(o), nt = String(o.note || "").trim();
     var rows = L.map(function (l) {
       return '<tr><td class="inv-n">' + esc(l.n) + (l.ex ? '<span class="inv-bx">+' + l.ex + " " + esc(l.w) + "</span>" : "") + "</td><td>" + (l.raw ? "-" : num(l.p)) + "</td><td>" + (l.raw ? "-" : l.q) + "</td><td><b>" + (l.raw ? "-" : num(l.t)) + "</b></td></tr>";
     }).join("");
     if (withShip) rows += '<tr class="ship"><td class="inv-n">التوصيل</td><td>—</td><td>—</td><td><b>' + num(o.fee) + "</b></td></tr>";
     return (cust ? custSection(cust) : "") + '<div class="inv-sub"><span>فاتورة الطلب رقم ' + o.bon + "</span>" + (o.dateTxt ? "<span>" + esc((o.day ? o.day + " " : "") + o.dateTxt) + "</span>" : "") + (o.timeTxt ? "<span>" + esc(o.timeTxt) + "</span>" : "") + "</div>" +
       '<table class="inv-t"><thead><tr><th class="inv-n">اسم الصنف</th><th>سعر القطعة</th><th>العدد</th><th>الإجمالي</th></tr></thead><tbody>' + rows +
-      '</tbody><tfoot><tr><td colspan="4"><div class="inv-f"><span>الإجمالي النهائي</span><b>' + num(tot - (withShip ? 0 : Number(o.fee) || 0)) + " ج.م</b></div></td></tr></tfoot></table>";
+      '</tbody><tfoot><tr><td colspan="4"><div class="inv-f"><span>الإجمالي النهائي</span><b>' + num(tot - (withShip ? 0 : Number(o.fee) || 0)) + " ج.م</b></div></td></tr>" +
+      (nt ? '<tr><td colspan="4"><div class="inv-nt"><b>ملحوظة :</b><p>' + esc(nt) + "</p></div></td></tr>" : "") + "</tfoot></table>";
   }
   function invBlock(o, withShip, cust) {
     var on = !!S.inv[o.bon];
@@ -463,9 +464,9 @@
       (open ? '<div class="abody">' + bodyFn() + "</div>" : (opt.tc || tcardHTML(o))) + "</div>";
   }
   function poolCard(o) {
-    var k = "acc" + o.bon, nt = (o.note || "").trim();
+    var k = "acc" + o.bon;
     return accCard(o, "", function () {
-      return invBlock(o, false) + (nt ? '<div class="note">' + esc(nt) + "</div>" : "") +
+      return invBlock(o, false) +
         '<button class="btn pri" data-acc="' + o.bon + '" style="margin-top:10px"' + (S.keys[k] ? " disabled" : "") + ">" + (S.keys[k] ? '<span class="spin"></span>' : ic("check") + " قبول الطلب") + "</button>";
     }, { clk: true });
   }
@@ -477,9 +478,9 @@
     return '<div class="steps">' + d.map(function (x) { return '<div class="st ' + x.c + '"><i>' + (x.i ? ic(x.i) : x.c === "prog" || x.c === "cur" ? "<em></em>" : "") + "</i><span>" + x.l + "</span>" + (x.sub ? "<small>" + x.sub + "</small>" : "") + "</div>"; }).join("") + "</div>";
   }
   function mineCard(o) {
-    var k = "st" + o.bon, sb = STAGE_BTN[o.stage], et = S.etaTxt[o.bon] || "", tag = o.stage === "accepted" ? "تم القبول" : o.stage === "preparing" ? "جاري التجهيز" : "جاري التوصيل";
+    var k = "st" + o.bon, sb = STAGE_BTN[o.stage], et = S.etaTxt[o.bon] || ((o.stage === "accepted" || o.stage === "delivering") ? (S.pos && Date.now() - S.pos.t < 180000 ? "جاري حساب وقت الوصول…" : "شغّل الـGPS عشان يظهر وقت الوصول") : ""), tag = o.stage === "accepted" ? "تم القبول" : o.stage === "preparing" ? "جاري التجهيز" : "جاري التوصيل";
     return accCard(o, '<span class="mtag ' + o.stage + '">' + tag + "</span>", function () {
-      return stepsHTML(o.stage) + (et ? '<div class="eta">' + ic("clock") + esc(et) + "</div>" : "") + invBlock(o, true, o) + (o.note ? '<div class="note">' + esc(o.note) + "</div>" : "") +
+      return stepsHTML(o.stage) + (et ? '<div class="eta">' + ic("clock") + esc(et) + "</div>" : "") + invBlock(o, true, o) +
         '<button class="btn ' + sb[2] + '" data-st="' + o.bon + "|" + sb[0] + '" style="margin-top:10px"' + (S.keys[k] ? " disabled" : "") + ">" + (S.keys[k] ? '<span class="spin"></span>' : sb[1]) + "</button>" +
         (o.stage === "accepted" ? '<button class="link" data-rel="' + o.bon + '" style="color:var(--bad)">تنازل عن الطلب</button>' : "");
     }, { hideAreaOpen: true, clk: true });
@@ -490,37 +491,41 @@
   function itemsSum(h) { var sm = parseLines(h.items).reduce(function (a, l) { return a + l.t; }, 0); return sm > 0 ? sm : Number(h.total) || 0; }
   function feeOf(h) { var r = recOf(h.bon); return r ? Number(r.fee) || 0 : Number(h.fee) || 0; }
   function delCard(h) {
-    var r = recOf(h.bon), dts = (r && r.deliveredAt) || keyMs(h.doneAt), d = dts ? new Date(dts) : null, o = { bon: h.bon, area: h.area, items: h.items || "", total: h.total, fee: feeOf(h), day: h.day, dateTxt: h.dateTxt, timeTxt: h.timeTxt };
+    var r = recOf(h.bon), dts = h.tDone || (r && r.deliveredAt) || keyMs(h.doneAt), d = dts ? new Date(dts) : null, o = { bon: h.bon, area: h.area, items: h.items || "", total: h.total, fee: feeOf(h), day: h.day, dateTxt: h.dateTxt, timeTxt: h.timeTxt, note: h.note };
     var tc = '<div class="tcard sm tc3"><div><small>اليوم</small><b>' + (d ? AR_D[d.getDay()] + " <span>(" + p2(d.getDate()) + "/" + p2(d.getMonth() + 1) + "/" + d.getFullYear() + ")</span>" : "—") + '</b></div><div><small>الساعة</small><b>' + (d ? fmT(dts) : "—") + '</b></div><div><small>الإجمالي</small><b dir="ltr">' + num(invTotal(o)) + " ج.م</b></div></div>";
     return accCard(o, '<span class="mtag done">تم التوصيل</span>', function () {
-      var dur = r && r.acceptedAt && r.deliveredAt > r.acceptedAt ? fmHM(r.deliveredAt - r.acceptedAt) : "—";
-      var cell = function (l, v) { return "<div><small>" + l + "</small><b>" + v + "</b></div>"; };
-      return '<div class="itab">' + cell("وقت الطلب", esc((h.timeTxt || "—"))) + cell("وقت القبول", r && r.acceptedAt ? fmT(r.acceptedAt) : "---") + cell("وقت التسليم", dts ? fmT(dts) : "---") + cell("مدة التوصيل", dur) + cell("ربح التوصيل", fm(feeOf(h)) + " ج.م") + cell("إجمالي الفاتورة", num(invTotal(o)) + " ج.م") + "</div>" +
-        invBlock(o, true, { bon: h.bon, name: h.name, phone: h.phone, area: h.area, street: h.street, landmark: h.landmark, cloc: h.cloc });
+      var acc = h.tAcc || (r && r.acceptedAt) || 0, ds = h.tDeliv || (r && r.deliveringAt) || (S.delAt && S.delAt[h.bon]) || 0, dur = ds && dts > ds ? fmDur(dts - ds) : "—";
+      var cell = function (c, l, v) { return '<div class="' + c + '"><small>' + l + "</small><b>" + v + "</b></div>"; };
+      return '<div class="dtab">' + cell("c1", "تاريخ الطلب", esc(((h.day ? h.day + " " : "") + (h.dateTxt || "")).trim() || "—")) + cell("c1", "وقت الطلب", esc(h.timeTxt || "—")) +
+        cell("c2", "وقت القبول", acc ? fmT(acc) : "---") + cell("c2", "مدة التوصيل", dur) + cell("c2", "وقت التسليم", dts ? fmT(dts) : "---") +
+        cell("c3", "سعر الطلب", num(itemsSum(h)) + " ج.م") + cell("c3", "خدمة التوصيل", num(feeOf(h)) + " ج.م") + "</div>" +
+        invBlock(o, true, { bon: h.bon, name: h.name, phone: h.phone, area: h.area, street: h.street, landmark: h.landmark, cloc: h.cloc, km: h.km, src: h.src, priced: h.priced });
     }, { tc: tc });
   }
+  // لما كارت يتفتح باقي الكروت بتختفي، ولما يتقفل بترجع
+  function onlyOpen(L) { if (S.open == null) return L; var m = L.filter(function (x) { return x.bon === S.open; }); return m.length ? m : L; }
   function vNew() {
     var w = S.pilot && S.pilot.working, h = pushBanner();
     if (!w) return h + '<div class="empty">' + ic("power") + "<b>أنت دلوقتي «لا يعمل»</b>شغّل حالتك علشان تظهرلك الطلبات الجديدة.</div>";
     if (!S.online && !S.pool.length) return h + '<div class="empty">' + ic("wifiX") + "<b>مفيش اتصال بالنت</b>الطلبات الجديدة هتظهر أول ما النت يرجع.</div>";
     if (!S.loaded) return h + '<div class="empty"><span class="spin"></span></div>';
     if (!S.pool.length) return h + '<div class="empty">' + ic("box") + "<b>مفيش طلبات جديدة دلوقتي</b>هننبّهك بصوت واهتزاز أول ما يوصل طلب (سيب التطبيق مفتوح).</div>";
-    return h + '<h3 class="sec">الطلبات الجديدة <small>(الأسرع بيقبل)</small></h3>' + S.pool.map(poolCard).join("");
+    return h + '<h3 class="sec">الطلبات الجديدة <small>(الأسرع بيقبل)</small></h3>' + onlyOpen(S.pool).map(poolCard).join("");
   }
   function vAcc() {
     var L = S.mine.filter(function (o) { return o.stage === "accepted"; });
     if (!L.length) return '<div class="empty">' + ic("checkc") + "<b>مفيش طلبات مقبولة</b>الطلبات اللي بتقبلها بتظهر هنا لحد ما توصل الصيدلية.</div>";
-    return '<h3 class="sec">الطلبات المقبولة <small>(' + L.length + ")</small></h3>" + L.map(mineCard).join("");
+    return '<h3 class="sec">الطلبات المقبولة <small>(' + L.length + ")</small></h3>" + onlyOpen(L).map(mineCard).join("");
   }
   function vDel() {
     var L = S.mine.filter(function (o) { return o.stage !== "accepted"; });
     if (!L.length) return '<div class="empty">' + ic("scooter") + "<b>مفيش طلبات في التوصيل</b>بعد ما تدوس «وصلت الصيدلية» الطلب بيجي هنا.</div>";
-    return '<h3 class="sec">التوصيل <small>(' + L.length + ")</small></h3>" + L.map(mineCard).join("");
+    return '<h3 class="sec">تجهيز و توصيل <small>(' + L.length + ")</small></h3>" + onlyOpen(L).map(mineCard).join("");
   }
   function vHist() {
     var vis = visHist();
     if (!vis.length) return '<div class="empty">' + ic("history") + "<b>لسه مفيش طلبات متسلّمة</b>الطلبات اللي بتوصلها بتظهر هنا.</div>";
-    return '<h3 class="sec">الطلبات المسلّمة <small>(' + vis.length + ")</small></h3>" + vis.map(delCard).join("");
+    return '<h3 class="sec">الطلبات المسلّمة <small>(' + vis.length + ")</small></h3>" + onlyOpen(vis).map(delCard).join("");
   }
   function vDay() {
     var vis = visHist(), tk = todayKey(), td = vis.filter(function (h) { return String(h.doneAt || "").indexOf(tk) === 0; });
@@ -551,6 +556,7 @@
   var dkDate = function (k) { var p = k.split("-"); return new Date(+p[0], +p[1] - 1, +p[2]); };
   var dkLabel = function (k) { var d = dkDate(k); return AR_D[d.getDay()] + "، " + d.getDate() + " " + AR_M[d.getMonth()]; };
   var fmT = function (ts) { if (!ts) return "---"; var d = new Date(ts), h = d.getHours(); return (h % 12 || 12) + ":" + p2(d.getMinutes()) + " " + (h < 12 ? "ص" : "م"); };
+  var fmDur = function (ms) { var t = Math.round((ms || 0) / 60000); return t < 1 ? "أقل من دقيقة" : t < 60 ? t + " د" : Math.floor(t / 60) + "س " + (t % 60) + "د"; };
   var fmHM = function (ms) { if (!ms || ms < 0) ms = 0; var t = Math.round(ms / 60000); return Math.floor(t / 60) + "س " + (t % 60) + "د"; };
   var keyMs = function (k) { var m = String(k || "").match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : 0; };
   function wkStart(date) { var d = new Date(date); d.setHours(0, 0, 0, 0); var day = d.getDay(); d.setDate(d.getDate() + (day === 0 ? -6 : 1) - day); return d; }
@@ -558,9 +564,9 @@
 
   function loadEarn() {
     var ph = (S.creds && S.creds.phone) || "";
-    S.earn = ld("mrf_earn_" + ph, { days: {}, tomb: {} }); S.shiftStart = ld("mrf_shift_" + ph, 0); S.accAt = ld("mrf_accat", {});
+    S.earn = ld("mrf_earn_" + ph, { days: {}, tomb: {} }); S.shiftStart = ld("mrf_shift_" + ph, 0); S.accAt = ld("mrf_accat", {}); S.delAt = ld("mrf_delat", {});
   }
-  function saveEarn() { var ph = (S.creds && S.creds.phone) || ""; sv("mrf_earn_" + ph, S.earn); sv("mrf_shift_" + ph, S.shiftStart || 0); sv("mrf_accat", S.accAt); }
+  function saveEarn() { var ph = (S.creds && S.creds.phone) || ""; sv("mrf_earn_" + ph, S.earn); sv("mrf_shift_" + ph, S.shiftStart || 0); sv("mrf_accat", S.accAt); sv("mrf_delat", S.delAt || {}); }
   function addEarn(rec) {
     if (!S.earn) loadEarn();
     Object.keys(S.earn.days).forEach(function (k) { S.earn.days[k] = S.earn.days[k].filter(function (x) { return !(x.bon === rec.bon && x.status === rec.status); }); if (!S.earn.days[k].length) delete S.earn.days[k]; });
@@ -754,13 +760,13 @@
   function netBtn(ns) {
     return '<button class="netb ' + ns.k + '" data-net="1" aria-label="حالة الاتصال">' + wifiIcon(ns.k) + (ns.n ? '<i class="nb-c">' + ns.n + "</i>" : "") + "</button>";
   }
-  var TITLES = { new: "الطلبات الجديدة", acc: "الطلبات المقبولة", del: "التوصيل", hist: "تم التوصيل", day: "حول اليوم" };
+  var TITLES = { new: "الطلبات الجديدة", acc: "الطلبات المقبولة", del: "تجهيز و توصيل", hist: "تم التوصيل", day: "حول اليوم" };
   function viewMain() {
     var w = S.pilot && S.pilot.working, nNew = w ? S.pool.length : 0;
     var ns = netState(), nAcc = S.mine.filter(function (o) { return o.stage === "accepted"; }).length, nDel = S.mine.length - nAcc;
     var body = S.page ? '<div class="ptitle"><button class="pback" ' + (S.page === "earnhist" ? 'data-eh="up"' : 'data-back="1"') + ' aria-label="رجوع">' + ic("back") + "</button>" + (S.page === "earnhist" ? "<h2>" + ehTitle() + "</h2>" : "") + "</div>" + pageBody(S.page) :
       S.tab === "new" ? vNew() : S.tab === "acc" ? vAcc() : S.tab === "del" ? vDel() : S.tab === "hist" ? vHist() : vDay();
-    var T = [["new", "box", "الطلبات الجديدة", nNew, ""], ["acc", "checkc", "المقبولة", nAcc, "g"], ["del", "scooter", "التوصيل", nDel, "g"], ["hist", "history", "تم التوصيل", 0, ""], ["day", "chart", "حول اليوم", 0, ""]];
+    var T = [["new", "box", "الطلبات الجديدة", nNew, ""], ["acc", "checkc", "المقبولة", nAcc, "g"], ["del", "scooter", "تجهيز و توصيل", nDel, "g"], ["hist", "history", "تم التوصيل", 0, ""], ["day", "chart", "حول اليوم", 0, ""]];
     var nav = T.map(function (t) { return '<button class="' + (!S.page && S.tab === t[0] ? "on" : "") + '" data-tab="' + t[0] + '">' + ic(t[1]) + "<span>" + t[2] + "</span>" + (t[3] ? '<i class="bd ' + t[4] + '">' + t[3] + "</i>" : "") + "</button>"; }).join("");
     var title = S.page ? (S.page === "earnhist" ? "سجل الأرباح" : PAGES[S.page]) : TITLES[S.tab];
     return '<header class="hdr"><div class="hrow"><img src="assets/logo.png" alt=""><div class="tt"><b>' + esc(title) + "</b></div>" + netBtn(ns) + '<button class="shiftpill ' + (w ? "on" : "") + '" data-shift="1" aria-label="' + (w ? "يعمل الآن" : "لا يعمل") + '">' + (S.keys.shift ? '<span class="spin" style="width:16px;height:16px;border-width:2px"></span>' : ic("power")) + '</button><button class="burger" data-menu="1" aria-label="القائمة">' + ic("menu") + "</button></div></header>" +
@@ -802,7 +808,7 @@
     else if (d.map) openMap(+d.map);
     else if (d.eh) ehAct(d.eh);
     else if (d.open) { S.open = +d.open; render(); var cEl = $("c" + S.open); if (cEl) cEl.scrollIntoView({ block: "start", behavior: "smooth" }); }
-    else if (d.close) { S.open = null; render(); }
+    else if (d.close) { var cb = S.open; S.open = null; render(); var c2 = $("c" + cb); if (c2) c2.scrollIntoView({ block: "start", behavior: "auto" }); }
     else if (d.net) { var n2 = netState(); toast(n2.k === "off" ? "مفيش اتصال بالنت" + (n2.n ? " — " + n2.n + " خطوة مستنية" : "") : n2.n ? "جاري إرسال " + n2.n + " خطوة للسيرفر" : "النت ضعيف", n2.k === "off" ? "bad" : "or"); if (S.queue.length) scheduleFlush(0); else refresh(); }
     else if (d.chat) toast("الشات مع العميل هيتفعّل قريب 💬");
     else if (d.inv) {
@@ -883,20 +889,23 @@
     S.mine.forEach(function (o) {
       var which = null, target = null;
       if (o.stage === "accepted") { which = "shop"; target = storePt(o); } else if (o.stage === "delivering") { which = "cust"; target = custPt(o); }
-      if (!which || !target) { if (S.etaTxt[o.bon]) { delete S.etaTxt[o.bon]; changed = true; } delete S.arrived[o.bon]; return; }
-      var key = o.bon + which + "_" + target.lat.toFixed(5) + "_" + target.lng.toFixed(5), hv = hav(S.pos, target), rt = S.route[key];
+      if (!which) { if (S.etaTxt[o.bon]) { delete S.etaTxt[o.bon]; changed = true; } delete S.arrived[o.bon]; return; }
+      // لو التطبيق مش عارف إحداثيات الهدف، السيرفر بيحسب الطريق والوقت بنفسه من اللينك وبيرجّع النقطة (tp)
+      var key = o.bon + which + (target ? "_" + target.lat.toFixed(5) + "_" + target.lng.toFixed(5) : ""), hv = target ? hav(S.pos, target) : null, rt = S.route[key];
       // مسافة ووقت الطريق الفعليين من السيرفر كل ~15 ثانية (أو لو الطيار اتحرك 150 متر)، وبينهم بنحدّث كل 5 ثواني بالتناسب مع قربه الفعلي
-      if (S.online && !S.routeBusy[key] && (!rt || Date.now() - rt.t > 15000 || hav(rt.pos, S.pos) * 1000 > 150)) {
+      if (S.online && !S.routeBusy[key] && (!rt || Date.now() - rt.t > 10000 || hav(rt.pos, S.pos) * 1000 > 100)) {
         S.routeBusy[key] = true; var at = { lat: S.pos.lat, lng: S.pos.lng };
         api("riderRoute", { bon: o.bon, stage: which, lat: at.lat, lng: at.lng }).then(function (r) {
           S.routeBusy[key] = false;
-          if (r && r.ok && r.m > 0) { S.route[key] = { m: r.m, s: r.s, hv: Math.max(hav(at, target), 0.005), pos: at, t: Date.now() }; etaTick(); }
+          if (r && r.tp && typeof r.tp.lat === "number" && typeof r.tp.lng === "number") { S.tgt = S.tgt || {}; S.tgt[o.bon + which] = { lat: r.tp.lat, lng: r.tp.lng }; }
+          if (r && r.ok && r.m > 0) { S.route[key] = { m: r.m, s: r.s || Math.round(r.m / 1000 / (CFG.SPEED_KMH || 25) * 3600), hv: target ? Math.max(hav(at, target), 0.005) : 0, pos: at, t: Date.now() }; etaTick(); }
         }, function () { S.routeBusy[key] = false; });
       }
       var secs;
-      if (rt && rt.m) { var ratio = Math.min(1.6, hv / rt.hv); secs = Math.max(0, (rt.s || (rt.m / 1000 / (CFG.SPEED_KMH || 25) * 3600)) * ratio); }
-      else secs = (hv * (CFG.ROAD_FACTOR || 1.4)) / (CFG.SPEED_KMH || 25) * 3600;
-      var arr = which === "cust" ? !!S.arrived[o.bon] : hv < 0.06, txt, show;
+      // الوقت دايمًا من حساب الطريق الحقيقي من السيرفر (مش تقدير بخط مستقيم): بيتجدد كل ~10 ثواني أو كل 100 متر، وبين التجديدين بينزل بالثواني الفعلية
+      if (rt && rt.m) secs = Math.max(0, rt.s - (Date.now() - rt.t) / 1000);
+      else return;
+      var arr = which === "cust" ? !!S.arrived[o.bon] : (target ? hv < 0.06 : !!(rt && rt.m < 60)), txt, show;
       if (arr) { txt = which === "shop" ? "وصل الصيدلية" : "وصل عندك"; show = which === "shop" ? "تم الوصول إلى الصيدلية ✅" : "تم الوصول إلى الموقع المحدد ✅"; }
       else { txt = fmtMin(Math.max(1, Math.round(secs / 60))); show = (which === "shop" ? "وصولك للصيدلية خلال " : "وصولك للعميل خلال ") + txt; }
       if (S.etaTxt[o.bon] !== show) { S.etaTxt[o.bon] = show; changed = true; }
