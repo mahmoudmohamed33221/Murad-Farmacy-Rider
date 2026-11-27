@@ -541,3 +541,23 @@ img,a,svg{-webkit-user-drag:none;user-drag:none}
 .ic-adr .ib.map.sm{transform:translateX(8px)}
 /* اللوجو دايرة من غير خلفية: مفيش مربع ورا الصور */
 .hrow img,.dh img,.inv-h img{background:none;box-shadow:none}
+
+/* ===== تعديلات v2: الهيدر على سطر واحد + الملحوظة جوه الفاتورة + كروت تم التوصيل + النافيجيشن ===== */
+.ahead .mtag,.ahead .newtag{white-space:nowrap;flex:none;font-size:10.5px;line-height:1.5;padding:2px 8px}
+.ahead .aside{flex:none;white-space:nowrap;gap:5px}
+.ahead.g3{grid-template-columns:auto minmax(0,1fr) auto;gap:6px}
+.ahead.g3 .amid{min-width:0;max-width:100%}
+.ahead.g3 .amid .tag.ap{max-width:100%}
+.nav button span{white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+
+.inv-t tfoot .inv-nt{display:flex;align-items:flex-start;gap:6px;padding:9px 10px;border-top:1px dashed var(--line);background:var(--orsoft);text-align:start}
+.inv-t tfoot .inv-nt b{flex:none;font-size:12.5px;font-weight:800;color:var(--or2)}
+.inv-t tfoot .inv-nt p{margin:0;flex:1;min-width:0;font-size:13px;font-weight:600;line-height:1.5;color:var(--fg);white-space:pre-wrap;word-break:break-word}
+
+.dtab{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:2px 0 10px}
+.dtab>div{display:flex;flex-direction:column;justify-content:center;gap:3px;min-height:58px;padding:9px 6px;border-radius:12px;border:1px solid transparent;text-align:center}
+.dtab small{display:block;font-size:11px;font-weight:700;color:var(--fg);opacity:.8}
+.dtab b{display:block;font-size:13.5px;font-weight:800;line-height:1.35;color:var(--fg);word-break:break-word}
+.dtab .c1{grid-column:span 3;background:rgba(59,130,246,.18);border-color:rgba(59,130,246,.38)}
+.dtab .c2{grid-column:span 2;background:rgba(245,179,1,.17);border-color:rgba(245,179,1,.4)}
+.dtab .c3{grid-column:span 3;background:rgba(34,197,94,.17);border-color:rgba(34,197,94,.4)}
