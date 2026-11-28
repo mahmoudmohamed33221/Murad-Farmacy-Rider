@@ -495,9 +495,14 @@
     var tc = '<div class="tcard sm tc3"><div><small>اليوم</small><b>' + (d ? AR_D[d.getDay()] + " <span>(" + p2(d.getDate()) + "/" + p2(d.getMonth() + 1) + "/" + d.getFullYear() + ")</span>" : "—") + '</b></div><div><small>الساعة</small><b>' + (d ? fmT(dts) : "—") + '</b></div><div><small>الإجمالي</small><b dir="ltr">' + num(invTotal(o)) + " ج.م</b></div></div>";
     return accCard(o, '<span class="mtag done">تم التوصيل</span>', function () {
       var acc = h.tAcc || (r && r.acceptedAt) || 0, ds = h.tDeliv || (r && r.deliveringAt) || (S.delAt && S.delAt[h.bon]) || 0, dur = ds && dts > ds ? fmDur(dts - ds) : "—";
+      var ph = h.tPharm || 0, pe = h.tPrepEnd || 0, tm = function (t) { return t ? fmT(t) : "---"; };
+      var prepDur = ph && pe && pe >= ph ? fmDur(pe - ph) : "—";
+      var totDur = ph && dts && dts >= ph ? fmDur(dts - ph) : (h.totMin > 0 ? fmDur(h.totMin * 60000) : "—");
       var cell = function (c, l, v) { return '<div class="' + c + '"><small>' + l + "</small><b>" + v + "</b></div>"; };
       return '<div class="dtab">' + cell("c1", "تاريخ الطلب", esc(((h.day ? h.day + " " : "") + (h.dateTxt || "")).trim() || "—")) + cell("c1", "وقت الطلب", esc(h.timeTxt || "—")) +
-        cell("c2", "وقت القبول", acc ? fmT(acc) : "---") + cell("c2", "مدة التوصيل", dur) + cell("c2", "وقت التسليم", dts ? fmT(dts) : "---") +
+        cell("c2", "وقت القبول", tm(acc)) + cell("c2", "وقت الوصول للصيدلية", tm(ph)) + cell("c2", "وقت انتهاء التجهيز", tm(pe)) +
+        cell("c2b", "وقت بدء التوصيل", tm(ds)) + cell("c2b", "وقت التسليم", tm(dts)) +
+        cell("c4", "مدة التجهيز", prepDur) + cell("c4", "مدة التوصيل", dur) + cell("c4", "إجمالي المدة", totDur) +
         cell("c3", "سعر الطلب", num(itemsSum(h)) + " ج.م") + cell("c3", "خدمة التوصيل", num(feeOf(h)) + " ج.م") + "</div>" +
         invBlock(o, true, { bon: h.bon, name: h.name, phone: h.phone, area: h.area, street: h.street, landmark: h.landmark, cloc: h.cloc, km: h.km, src: h.src, priced: h.priced });
     }, { tc: tc });
@@ -846,7 +851,7 @@
     var c = S.mapRef[bon]; if (!c) return; var p = custPt(c);
     openUrls(p ? ["google.navigation:q=" + p.lat + "," + p.lng + "&mode=d", "geo:" + p.lat + "," + p.lng + "?q=" + p.lat + "," + p.lng, "https://www.google.com/maps/dir/?api=1&destination=" + p.lat + "," + p.lng + "&travelmode=driving"] : [custMap(c)]);
   }
-  // لو المندوب قرّب من العميل نبعت للسيرفر يتأكد (بمسافة الطريق مش خط مستقيم) ولو ≤ 25 متر العميل يشوف "المندوب وصل"
+  // لو المندوب قرّب من العميل نبعت للسيرفر يتأكد (بمسافة الطريق مش خط مستقيم) ولو ≤ 50 متر العميل يشوف "المندوب وصل"
   function nearCheck() {
     if (!S.online || !S.pos) return;
     S.arrived = S.arrived || {};
@@ -871,7 +876,7 @@
           return G.watchPosition({ enableHighAccuracy: true, timeout: 20000 }, function (p) { if (p && p.coords) onPos(p.coords.latitude, p.coords.longitude); });
         }).then(function (id) { S.geoId = id; }).catch(function () {});
       } else if (navigator.geolocation) {
-        S.geoId = navigator.geolocation.watchPosition(function (p) { onPos(p.coords.latitude, p.coords.longitude); }, function () {}, { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 });
+        S.geoId = navigator.geolocation.watchPosition(function (p) { onPos(p.coords.latitude, p.coords.longitude); }, function () {}, { enableHighAccuracy: true, maximumAge: 3000, timeout: 20000 });
       }
     } catch (e) {}
     if (!S.etaT) S.etaT = setInterval(function () { etaTick(); nearCheck(); }, 5000);
@@ -892,8 +897,8 @@
       if (!which) { if (S.etaTxt[o.bon]) { delete S.etaTxt[o.bon]; changed = true; } delete S.arrived[o.bon]; return; }
       // لو التطبيق مش عارف إحداثيات الهدف، السيرفر بيحسب الطريق والوقت بنفسه من اللينك وبيرجّع النقطة (tp)
       var key = o.bon + which + (target ? "_" + target.lat.toFixed(5) + "_" + target.lng.toFixed(5) : ""), hv = target ? hav(S.pos, target) : null, rt = S.route[key];
-      // مسافة ووقت الطريق الفعليين من السيرفر كل ~15 ثانية (أو لو الطيار اتحرك 150 متر)، وبينهم بنحدّث كل 5 ثواني بالتناسب مع قربه الفعلي
-      if (S.online && !S.routeBusy[key] && (!rt || Date.now() - rt.t > 10000 || hav(rt.pos, S.pos) * 1000 > 100)) {
+      // مسافة ووقت الطريق الفعليين من السيرفر: كل ~5 ثواني وهو متحرك (بعد 40 متر)، ومرة كل 20 ثانية وهو واقف، وبينهم الوقت بينزل بالثواني الفعلية
+      if (S.online && !S.routeBusy[key] && (!rt || (Date.now() - rt.t > 4000 && hav(rt.pos, S.pos) * 1000 > 40) || Date.now() - rt.t > 20000)) {
         S.routeBusy[key] = true; var at = { lat: S.pos.lat, lng: S.pos.lng };
         api("riderRoute", { bon: o.bon, stage: which, lat: at.lat, lng: at.lng }).then(function (r) {
           S.routeBusy[key] = false;
@@ -902,7 +907,7 @@
         }, function () { S.routeBusy[key] = false; });
       }
       var secs;
-      // الوقت دايمًا من حساب الطريق الحقيقي من السيرفر (مش تقدير بخط مستقيم): بيتجدد كل ~10 ثواني أو كل 100 متر، وبين التجديدين بينزل بالثواني الفعلية
+      // الوقت دايمًا من حساب الطريق الحقيقي من السيرفر (مش تقدير بخط مستقيم): بيتجدد كل ~5 ثواني وهو متحرك أو كل 20 ثانية وهو واقف، وبين التجديدين بينزل بالثواني الفعلية
       if (rt && rt.m) secs = Math.max(0, rt.s - (Date.now() - rt.t) / 1000);
       else return;
       var arr = which === "cust" ? !!S.arrived[o.bon] : (target ? hv < 0.06 : !!(rt && rt.m < 60)), txt, show;
